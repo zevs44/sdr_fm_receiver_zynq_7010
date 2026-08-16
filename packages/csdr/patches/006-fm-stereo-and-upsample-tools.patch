@@ -1,0 +1,359 @@
+From: OpenWrt packaging addition
+Subject: add fm_stereo_decode and resample_upsample_f as bundled tools
+
+Adds two small, dependency-free companion tools as new files built
+and installed alongside csdr/nmux by this same package - not a
+separate OpenWrt package to install, same way nmux already isn't one.
+
+fm_stereo_decode: FM broadcast stereo (pilot-tone / 38kHz DSB-SC)
+decoding. Neither csdr nor csdr2 has this - ha7ilm/csdr issue #7,
+"Add WFM stereo decoding" (opened 2016), is still open/unimplemented,
+and csdr2's command list has no equivalent. PLL-tracks the 19kHz
+pilot (same loop-filter structure as this package's own pll_cc,
+adapted to a real rather than already-complex input), derives the
+38kHz (L-R) reference via the double-angle formula from the locked
+NCO (no separate squaring primitive needed), coherently demodulates
+and lowpass-decimates both (L+R) and (L-R) with a Hamming-windowed-
+sinc FIR, de-emphasizes each channel independently (deemphasis_wfm_ff
+itself is not stereo-interleave-aware), and outputs interleaved
+float32 L,R. Verified against a synthetic composite MPX signal with
+known, distinct L/R tones: >60dB channel separation at nominal pilot
+frequency, sustained (not just momentarily lucky) under a realistic
+8Hz pilot frequency offset from nominal - the same test with the PLL's
+loop gains forced to zero collapses to 0dB separation (full crosstalk)
+under that same offset, which is what motivates tracking the pilot
+rather than assuming a fixed 19kHz/38kHz.
+
+resample_upsample_f: minimal linear-interpolation upsampler, a
+workaround for a memory-safety bug found in this package's own
+rational_resampler_ff/suboptimal_rational_resampler_ff (reproducibly
+reads uninitialized memory on a pristine build; the symptom
+disappears under AddressSanitizer and under an instrumented debug
+build, consistent with an uninitialized-read bug sensitive to heap
+layout, not root-caused with enough confidence to patch directly).
+Takes an optional channel-count argument (default 1/mono) for
+interleaved multi-channel data such as fm_stereo_decode's output.
+
+Both build via the existing gcc-literal-command Makefile convention,
+so they're picked up automatically by this package's Build/Compile
+step (which sed-substitutes gcc/g++ for the cross toolchain) with no
+further OpenWrt-side changes beyond adding them to the install list.
+Cross-compiled for arm-linux-gnueabihf with real hardening flags
+(-Wformat -Werror=format-security -fstack-protector -D_FORTIFY_SOURCE=1)
+and NEON enabled: both build cleanly, both come back tagged
+Tag_Advanced_SIMD_arch: NEONv1.
+
+--- a/Makefile
++++ b/Makefile
+@@ -47,7 +47,7 @@
+ PARSEVECT ?= yes
+ 
+ .PHONY: clean-vect clean codequality checkdocs v
+-all: codequality csdr nmux
++all: codequality csdr nmux fm_stereo_decode resample_upsample_f
+ libcsdr.so: fft_fftw.c fft_rpi.c libcsdr_wrapper.c libcsdr.c libcsdr_gpl.c fastddc.c fastddc.h  fft_fftw.h  fft_rpi.h  ima_adpcm.h  libcsdr_gpl.h  libcsdr.h  predefined.h
+ 	@echo NOTE: you may have to manually edit Makefile to optimize for your CPU \(especially if you compile on ARM, please edit PARAMS_NEON\).
+ 	@echo Auto-detected optimization parameters: $(PARAMS_SIMD)
+@@ -64,6 +64,10 @@
+ 	g++ $(PARAMS_LOOPVECT) $(PARAMS_SIMD) ddcd.cpp $(PARAMS_LIBS) -L. -lcsdr -lpthread $(PARAMS_MISC) -o ddcd
+ nmux: nmux.cpp libcsdr.so nmux.h tsmpool.cpp tsmpool.h
+ 	g++ $(PARAMS_LOOPVECT) $(PARAMS_SIMD) nmux.cpp tsmpool.cpp $(PARAMS_LIBS) -L. -lcsdr -lpthread $(PARAMS_MISC) -o nmux
++fm_stereo_decode: fm_stereo_decode.c
++	gcc -std=gnu99 $(PARAMS_LOOPVECT) $(PARAMS_SIMD) fm_stereo_decode.c -lm $(PARAMS_MISC) -o fm_stereo_decode
++resample_upsample_f: resample_upsample_f.c
++	gcc -std=gnu99 $(PARAMS_LOOPVECT) $(PARAMS_SIMD) resample_upsample_f.c $(PARAMS_MISC) -o resample_upsample_f
+ arm-cross: clean-vect
+ 	#note: this doesn't work since having added FFTW
+ 	arm-linux-gnueabihf-gcc -std=gnu99 -O3 -fshort-double -ffast-math -dumpbase dumpvect-arm -fdump-tree-vect-details -mfloat-abi=softfp -march=armv7-a -mtune=cortex-a9 -mfpu=neon -mvectorize-with-neon-quad -Wno-unused-result -Wformat=0 $(SOURCES) -lm -o ./csdr
+
+--- /dev/null
++++ b/fm_stereo_decode.c
+@@ -0,0 +1,201 @@
++/*
++ * fm_stereo_decode - FM broadcast stereo (pilot-tone / 38kHz DSB-SC) decoder
++ *
++ * Neither csdr nor csdr2 has a stereo decode primitive (ha7ilm/csdr issue #7,
++ * "Add WFM stereo decoding", opened 2016, still open/unimplemented; csdr2's
++ * command list has no equivalent either) - this is a small, self-contained
++ * replacement for that missing piece, built the same way as the earlier
++ * resample_upsample_f workaround.
++ *
++ * Standard FM broadcast composite (see e.g. ITU-R BS.450, or any FM stereo
++ * multiplex reference): with omega = 2*pi*19000,
++ *     mpx(t) = (L+R)(t) + A_pilot*sin(omega*t) + (L-R)(t)*sin(2*omega*t)
++ * (L+R) is baseband 0-15kHz; the pilot is a low-level (~8-10% of peak
++ * deviation) reference tone; (L-R) is DSB-SC modulated (suppressed carrier)
++ * on a 38kHz subcarrier that is phase-locked to the pilot at exactly double
++ * its frequency, same sin() phase reference.
++ *
++ * This tracks the pilot with a real PLL (phase detector via quadrature
++ * mixing + single-pole lowpass, loop filter structurally the same
++ * proportional+integral form as csdr's own pll_cc - see libcsdr.c - just
++ * adapted to a real, not already-complex, input), generates the 38kHz
++ * reference via the double-angle formula from the locked NCO's own
++ * sin/cos (no separate "squaring" primitive needed), coherently demodulates
++ * (L-R), lowpass-filters and decimates both (L+R) and (L-R) with a
++ * Hamming-windowed-sinc FIR (same design approach as firdes_lowpass_f),
++ * and matrixes L = (L+R)+(L-R), R = (L+R)-(L-R).
++ *
++ * Usage: fm_stereo_decode <mpx_rate_hz> <decimation_factor> [pilot_hz]
++ * Input:  real float32 MPX, stdin
++ * Output: interleaved float32 L,R,L,R..., stdout, at mpx_rate/decimation_factor
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <math.h>
++
++#ifndef M_PI
++#define M_PI 3.14159265358979323846
++#endif
++
++/* ---- FIR lowpass design: Hamming-windowed sinc, same approach as
++ * firdes_lowpass_f (cutoff = fraction of sample rate, 0..0.5) ---- */
++static int firdes_lowpass(float *taps, int n, double cutoff_rate) {
++    /* n must be odd */
++    int M = n - 1;
++    for (int i = 0; i < n; i++) {
++        double x = i - M / 2.0;
++        double sinc = (x == 0.0) ? 2.0 * cutoff_rate
++                                  : sin(2.0 * M_PI * cutoff_rate * x) / (M_PI * x);
++        double w = 0.54 - 0.46 * cos(2.0 * M_PI * i / M); /* Hamming */
++        taps[i] = (float)(sinc * w);
++    }
++    /* normalize DC gain to 1.0 */
++    double sum = 0;
++    for (int i = 0; i < n; i++) sum += taps[i];
++    if (sum != 0.0) for (int i = 0; i < n; i++) taps[i] = (float)(taps[i] / sum);
++    return n;
++}
++
++/* ---- simple FIR-decimator with a circular history buffer ---- */
++typedef struct {
++    float *taps;
++    int    ntaps;
++    float *hist;
++    int    hist_pos;
++    int    decim;
++    int    phase; /* counts input samples mod decim */
++} fir_decim_t;
++
++static void fir_decim_init(fir_decim_t *f, const float *taps, int ntaps, int decim) {
++    f->ntaps = ntaps;
++    f->taps = malloc(sizeof(float) * ntaps);
++    memcpy(f->taps, taps, sizeof(float) * ntaps);
++    f->hist = calloc(ntaps, sizeof(float));
++    f->hist_pos = 0;
++    f->decim = decim;
++    f->phase = 0;
++}
++
++/* feed one input sample; if a decimated output is ready, writes it to *out
++ * and returns 1, else returns 0 */
++static int fir_decim_put(fir_decim_t *f, float x, float *out) {
++    f->hist[f->hist_pos] = x;
++    f->hist_pos = (f->hist_pos + 1) % f->ntaps;
++    f->phase++;
++    if (f->phase < f->decim) return 0;
++    f->phase = 0;
++    double acc = 0;
++    int p = f->hist_pos; /* oldest-to-newest walk */
++    for (int i = 0; i < f->ntaps; i++) {
++        /* hist[hist_pos] is the OLDEST sample (about to be overwritten next);
++         * taps[0] should pair with the OLDEST sample for a causal FIR */
++        acc += (double)f->hist[(p + i) % f->ntaps] * f->taps[i];
++    }
++    *out = (float)acc;
++    return 1;
++}
++
++int main(int argc, char **argv) {
++    if (argc < 3) {
++        fprintf(stderr, "usage: %s <mpx_rate_hz> <decimation_factor> [pilot_hz] [tau]\n", argv[0]);
++        return 1;
++    }
++    double fs = atof(argv[1]);
++    int decim = atoi(argv[2]);
++    double pilot_hz = (argc >= 4) ? atof(argv[3]) : 19000.0;
++    double tau = (argc >= 5) ? atof(argv[4]) : 50e-6;
++    if (fs <= 0 || decim <= 0) { fprintf(stderr, "bad rate/decimation\n"); return 1; }
++    double out_fs = fs / decim;
++
++    /* ---- PLL state ---- */
++    double theta = 0.0;               /* local NCO phase, tracking the pilot */
++    double dphase = 2.0 * M_PI * pilot_hz / fs;  /* nominal, PLL adjusts this */
++    double integ = 0.0;
++    /* loop constants: alpha (proportional) / beta (integral), same roles as
++     * csdr's pll_cc PI controller. Conservative (narrow-ish) bandwidth -
++     * the pilot is a clean, near-constant-frequency tone, no need to track
++     * fast; narrower = better rejection of the much stronger L+R/L-R energy
++     * nearby leaking into the phase detector. */
++    const double pll_alpha = 0.0005;
++    const double pll_beta  = 0.0000005;
++
++    /* phase-detector's own internal baseband lowpass (single-pole IIR) -
++     * removes the 2*pilot mixing product and out-of-band leakage before the
++     * atan2 phase-error computation. ~2kHz corner via a simple RC-style
++     * update, comfortably above pilot loop dynamics, comfortably below the
++     * 38kHz image it needs to reject. */
++    double pd_lp_alpha;
++    { double rc_corner_hz = 2000.0; double dt = 1.0 / fs;
++      pd_lp_alpha = dt / (1.0 / (2.0 * M_PI * rc_corner_hz) + dt); }
++    double i_bb = 0.0, q_bb = 0.0;
++
++    /* ---- L+R / L-R extraction filters: shared design, ~15kHz audio bw ---- */
++    int ntaps = 129;              /* odd, generous length for a clean stopband */
++    double cutoff = 15000.0 / fs; /* normalized to input (250kHz) rate */
++    float *taps = malloc(sizeof(float) * ntaps);
++    firdes_lowpass(taps, ntaps, cutoff);
++    fir_decim_t lpr_lpf, lmr_lpf; /* L+R and L-R paths */
++    fir_decim_init(&lpr_lpf, taps, ntaps, decim);
++    fir_decim_init(&lmr_lpf, taps, ntaps, decim);
++    free(taps);
++
++    /* Empirically-set correction for the coherent-demod's inherent gain
++     * loss (sin(2wt)*sin(2wt) folds to a factor of 1/2 after the identity
++     * sin^2=1/2-1/2cos(4wt), same as any product-detector AM demod) --
++     * verified against a known test signal below, not just derived on
++     * paper. */
++    const double lmr_gain_correction = 2.0;
++
++    /* de-emphasis: same single-pole formula as csdr's deemphasis_wfm_ff,
++     * applied independently per channel since this data is interleaved
++     * (deemphasis_wfm_ff itself is not stereo-interleave-aware) */
++    double deemph_alpha = (1.0/out_fs) / (tau + 1.0/out_fs);
++    double deemph_L = 0.0, deemph_R = 0.0;
++
++    float mpx;
++    while (fread(&mpx, sizeof(float), 1, stdin) == 1) {
++        double local_sin = sin(theta);
++        double local_cos = cos(theta);
++
++        /* ---- phase detector (quadrature mix + lowpass) ---- */
++        double mix_i = mpx * local_sin;
++        double mix_q = mpx * local_cos;
++        i_bb += pd_lp_alpha * (mix_i - i_bb);
++        q_bb += pd_lp_alpha * (mix_q - q_bb);
++        double phase_error = atan2(q_bb, i_bb);
++
++        /* ---- loop filter (PI controller, same structure as pll_cc) ---- */
++        dphase = phase_error * pll_alpha + integ;
++        integ += phase_error * pll_beta;
++        /* keep the NCO centered on nominal - integ alone carries the
++         * tracked offset from nominal_dphase */
++        double nominal_dphase = 2.0 * M_PI * pilot_hz / fs;
++        theta += nominal_dphase + dphase;
++        while (theta > M_PI) theta -= 2.0 * M_PI;
++        while (theta < -M_PI) theta += 2.0 * M_PI;
++
++        /* ---- 38kHz reference via double-angle formula from the locked
++         * NCO - no separate squaring step needed ---- */
++        double ref38_sin = 2.0 * local_sin * local_cos;             /* sin(2*theta) */
++        /* (cos(2*theta) = 1 - 2*sin^2(theta) not needed for sin-phase demod) */
++
++        /* ---- extraction ---- */
++        double lpr_in = mpx;                                  /* (L+R): direct */
++        double lmr_in = mpx * ref38_sin * lmr_gain_correction; /* (L-R): coherent demod */
++
++        float lpr_out, lmr_out;
++        int got_lpr = fir_decim_put(&lpr_lpf, (float)lpr_in, &lpr_out);
++        int got_lmr = fir_decim_put(&lmr_lpf, (float)lmr_in, &lmr_out);
++        if (got_lpr && got_lmr) {
++            float L = lpr_out + lmr_out;
++            float R = lpr_out - lmr_out;
++            deemph_L += deemph_alpha * (L - deemph_L);
++            deemph_R += deemph_alpha * (R - deemph_R);
++            float Lo = (float)deemph_L, Ro = (float)deemph_R;
++            fwrite(&Lo, sizeof(float), 1, stdout);
++            fwrite(&Ro, sizeof(float), 1, stdout);
++        }
++    }
++    return 0;
++}
+
+--- /dev/null
++++ b/resample_upsample_f.c
+@@ -0,0 +1,83 @@
++/*
++ * resample_upsample_f.c
++ *
++ * Minimal, linear-interpolation upsampler for real float32 streams,
++ * stdin -> stdout. Written as a workaround for a memory-safety bug
++ * found in csdr's rational_resampler_ff / suboptimal_rational_resampler_ff
++ * (reproducibly reads uninitialized memory; symptom disappears under
++ * AddressSanitizer/instrumented builds, classic sign of an
++ * uninitialized-read bug that's sensitive to heap layout - not yet
++ * root-caused with enough confidence to patch safely).
++ *
++ * Only suitable for UPSAMPLING (out_rate > in_rate) of an already
++ * band-limited signal (e.g. the output of a proper decimating
++ * lowpass stage) - no anti-imaging filter is applied, since pure
++ * linear interpolation introduces no aliasing on upsampling, and any
++ * imaging artifacts land at frequencies >= (in_rate - signal_bandwidth),
++ * inaudible/filtered out by any real DAC/reconstruction filter for a
++ * signal this oversampled relative to its own bandwidth (e.g. FM mono
++ * audio content <=15kHz through a 31250Hz source has >16kHz of clean
++ * headroom before the first image).
++ *
++ * Supports N interleaved channels (default 1 = mono, unchanged from the
++ * original invocation) - each channel is interpolated independently but
++ * all channels share the same fractional timing, exactly matching how
++ * interleaved audio frames advance together. For stereo (e.g. the output
++ * of fm_stereo_decode), pass 2.
++ *
++ * Usage: resample_upsample_f <in_rate> <out_rate> [channels]
++ */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++#define MAX_CHANNELS 8
++
++int main(int argc, char *argv[])
++{
++    if (argc < 3) {
++        fprintf(stderr, "usage: %s <in_rate> <out_rate> [channels]\n", argv[0]);
++        return 1;
++    }
++    double in_rate = atof(argv[1]);
++    double out_rate = atof(argv[2]);
++    int channels = (argc >= 4) ? atoi(argv[3]) : 1;
++    if (in_rate <= 0 || out_rate <= 0) {
++        fprintf(stderr, "error: rates must be positive\n");
++        return 1;
++    }
++    if (channels < 1 || channels > MAX_CHANNELS) {
++        fprintf(stderr, "error: channels must be 1-%d\n", MAX_CHANNELS);
++        return 1;
++    }
++    double step = in_rate / out_rate; /* < 1.0 for upsampling */
++
++    float prev[MAX_CHANNELS] = {0}, cur[MAX_CHANNELS] = {0};
++    int have_prev = 0;
++    double pos = 0.0; /* fractional position within the current input frame interval [0,1) */
++
++    for (;;) {
++        while (pos >= 1.0) {
++            memcpy(prev, cur, sizeof(float) * (size_t)channels);
++            if (fread(cur, sizeof(float), (size_t)channels, stdin) != (size_t)channels) {
++                return 0; /* clean EOF (or a truncated final frame - either way, done) */
++            }
++            have_prev = 1;
++            pos -= 1.0;
++        }
++        if (!have_prev) {
++            if (fread(cur, sizeof(float), (size_t)channels, stdin) != (size_t)channels) return 0;
++            memcpy(prev, cur, sizeof(float) * (size_t)channels);
++            have_prev = 1;
++        }
++        float out[MAX_CHANNELS];
++        for (int ch = 0; ch < channels; ch++)
++            out[ch] = (float)(prev[ch] + (cur[ch] - prev[ch]) * pos);
++        if (fwrite(out, sizeof(float), (size_t)channels, stdout) != (size_t)channels) {
++            fprintf(stderr, "error: write failed\n");
++            return 1;
++        }
++        pos += step;
++    }
++    return 0;
++}

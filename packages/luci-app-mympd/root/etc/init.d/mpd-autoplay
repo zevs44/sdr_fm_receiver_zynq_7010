@@ -1,0 +1,114 @@
+#!/bin/sh /etc/rc.common
+# Starts playback automatically once MPD is confirmed ready -- and, if the
+# queue contains internet radio streams, once DNS is confirmed ready too.
+# Runs once, near the very end of boot.
+#
+# Deliberately NOT USE_PROCD=1: this is a one-shot background task, not a
+# long-running daemon, and USE_PROCD would pull in
+# /lib/functions/procd.sh, which takes a blocking flock on fd 1000 at
+# *source* time -- exactly what made two earlier versions of this feature
+# unreliable when it was launched from inside /etc/init.d/mpd's own
+# start_service() (nested procd init scripts inherit that fd/lock). A
+# plain rc.common start()/stop() sidesteps that mechanism entirely, and is
+# all a fire-and-forget boot task actually needs.
+#
+# This replaces the earlier continuous-watcher design (a boot-enabled
+# procd service polling MPD's PID to also catch LuCI-triggered restarts).
+# That's gone: it doesn't know or care whether the queue needs internet,
+# and turned every MPD restart into a fresh possible race against DNS,
+# not just the boot-time one that actually needed guarding against. If
+# autoplay-on-restart (not just autoplay-on-boot) turns out to matter in
+# practice, it needs re-adding deliberately -- not as a side effect of a
+# generic "restart" trigger.
+
+START=99
+
+AUTOPLAY_FLAG=/etc/mpd_autoplay
+
+SETTLE_DELAY=15   # grace period before the first check at all, seconds
+MPD_WAIT=30       # max time to wait for MPD's control socket, seconds
+DNS_WAIT=30       # max time to wait for DNS, only if the queue needs it
+BUFFER_WAIT=3     # grace period after `mpc play` before verifying
+
+log() { logger -t mpd-autoplay "$@"; }
+
+autoplay_on() {
+	[ "$(cat "$AUTOPLAY_FLAG" 2>/dev/null)" = "yes" ]
+}
+
+# wait_for <timeout_seconds> <command...>: polls once a second, returning
+# as soon as <command...> exits zero, or 1 if it never does in time.
+# Checks immediately before the first sleep, so an already-ready condition
+# never wastes any of the timeout.
+wait_for() {
+	local timeout="$1"; shift
+	local n=0
+	while [ "$n" -lt "$timeout" ]; do
+		"$@" >/dev/null 2>&1 && return 0
+		n=$((n + 1))
+		sleep 1
+	done
+	return 1
+}
+
+autoplay_run() {
+	autoplay_on || return 0
+
+	log "autoplay enabled -- waiting ${SETTLE_DELAY}s for the system to settle"
+	sleep "$SETTLE_DELAY"
+	autoplay_on || { log "disabled during settle delay -- aborting"; return 0; }
+
+	if ! wait_for "$MPD_WAIT" mpc status; then
+		log "MPD control socket did not appear within ${MPD_WAIT}s -- giving up"
+		return 1
+	fi
+
+	# Internet radio needs DNS/WAN, which can legitimately still be coming
+	# up this late in boot on a slow PPPoE/DHCP link -- this was the
+	# original bug report: mpc play was firing before DNS was ready. Only
+	# bother waiting at all if the queue actually has a stream URL in it.
+	playlist_text="$(mpc playlist 2>/dev/null)"
+	if printf '%s\n' "$playlist_text" | grep -qE 'https?://'; then
+		# Resolve the actual stream host, not an unrelated third party:
+		# some networks have DNS up but can't resolve every public name
+		# (split-horizon DNS, blocklists, captive portals), so testing the
+		# host we actually need is the more accurate check. Falls back to
+		# a well-known name only if a host couldn't be extracted.
+		stream_host="$(printf '%s\n' "$playlist_text" \
+			| grep -oE 'https?://[^/[:space:]]+' | head -n1 \
+			| sed -E 's#^https?://##; s#[:/].*##')"
+		[ -n "$stream_host" ] || stream_host="openwrt.org"
+
+		log "internet stream queued -- waiting up to ${DNS_WAIT}s for DNS ($stream_host)"
+		if wait_for "$DNS_WAIT" nslookup "$stream_host"; then
+			log "DNS is ready"
+		else
+			log "DNS still not resolving $stream_host after ${DNS_WAIT}s -- trying anyway"
+		fi
+	fi
+
+	autoplay_on || { log "disabled while waiting -- aborting"; return 0; }
+
+	if ! mpc play >/dev/null 2>&1; then
+		log "mpc play failed outright"
+		return 1
+	fi
+
+	sleep "$BUFFER_WAIT"
+
+	if mpc status 2>/dev/null | grep -q '\[playing\]'; then
+		log "playback successfully started and verified"
+		return 0
+	fi
+
+	log "playback did not start (empty queue? audio device busy? stream unreachable?)"
+	return 1
+}
+
+start() {
+	( autoplay_run ) &
+}
+
+stop() {
+	return 0
+}

@@ -1,0 +1,43 @@
+From: OpenWrt packaging fix
+Subject: fastddc.c: make is_integer() static inline
+
+is_integer() is declared as plain C99 "inline" (no "static", no
+matching extern declaration anywhere - fastddc.h does not declare
+it). Under strict ISO C99 inline semantics, a plain "inline"
+definition is NOT guaranteed to emit a linkable out-of-line body at
+all: whether that's needed depends entirely on whether the compiler
+happens to inline every call site.
+
+At upstream's own -O3 (and at plain -O2) GCC inlines the single call
+site in fastddc_init() and everything links. At -Os - what OpenWrt's
+TARGET_CFLAGS actually requests for space-constrained targets, and
+what ends up as the *effective* optimization level here since it's
+appended after csdr's own -O2 on the command line - GCC declines to
+inline it and, per the standard, is not obligated to leave a callable
+copy behind either. Result:
+
+  ld: ./libcsdr.so: undefined reference to `is_integer'
+
+"static inline" has well-defined behavior in every C mode (the
+compiler is always free to inline it, or always free to emit a
+private, translation-unit-local copy) and removes the dependency on
+inlining heuristics entirely. is_integer() is only ever called from
+within fastddc.c itself, so static is exactly the linkage it needs -
+no other file references it (confirmed: is_nan() and
+fir_one_pass_ff(), which face the same plain-inline pattern, are each
+also declared as an ordinary prototype in libcsdr.h, which is what
+correctly gives *them* external linkage already; is_integer has no
+such declaration anywhere, which is what makes it the one broken
+case).
+
+--- a/fastddc.c
++++ b/fastddc.c
+@@ -33,7 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ //DDC implementation based on:
+ //http://www.3db-labs.com/01598092_MultibandFilterbank.pdf
+ 
+-inline int is_integer(float a) { return floorf(a) == a; }
++static inline int is_integer(float a) { return floorf(a) == a; }
+ 
+ int fastddc_init(fastddc_t* ddc, float transition_bw, int decimation, float shift_rate)
+ {

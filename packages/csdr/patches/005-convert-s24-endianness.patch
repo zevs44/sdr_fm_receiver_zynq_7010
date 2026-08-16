@@ -1,0 +1,60 @@
+From: OpenWrt packaging fix
+Subject: libcsdr.c: fix inverted --bigendian flag in convert_f_s24/convert_s24_f
+
+Empirically confirmed (encoding a known float value and dumping the
+raw output bytes) that the bigendian/non-bigendian branches were
+swapped: the default (no --bigendian flag) produced big-endian byte
+order, and passing --bigendian produced little-endian byte order -
+backwards from what the flag name says.
+
+This is harmless for a pure csdr-to-csdr round trip (convert_f_s24
+piped into convert_s24_f with the same flag setting works either
+way, since both ends are consistently "wrong" together), but breaks
+interop with any standards-following consumer - e.g. piping into
+`aplay -f S24_3LE` while csdr is actually emitting S24_3BE-ordered
+bytes byte-swaps every sample.
+
+Fix: swap the branch bodies in both functions so --bigendian
+actually emits/expects big-endian byte order, and the default
+emits/expects little-endian (matching ALSA's S24_3LE, the more
+common convention, as the unflagged default).
+
+--- a/libcsdr.c
++++ b/libcsdr.c
+@@ -2407,17 +2407,17 @@
+     {
+         int temp=input[i]*(INT_MAX>>8);
+         unsigned char* ptemp=(unsigned char*)&temp;
+-        output[k++]=*ptemp;
+-        output[k++]=*(ptemp+1);
+         output[k++]=*(ptemp+2);
++        output[k++]=*(ptemp+1);
++        output[k++]=*ptemp;
+     }
+     else for(int i=0;i<input_size;i++)
+     {
+         int temp=input[i]*(INT_MAX>>8);
+         unsigned char* ptemp=(unsigned char*)&temp;
+-        output[k++]=*(ptemp+2);
+-        output[k++]=*(ptemp+1);
+         output[k++]=*ptemp;
++        output[k++]=*(ptemp+1);
++        output[k++]=*(ptemp+2);
+     }
+ }
+ 
+@@ -2426,12 +2426,12 @@
+     int k=0;
+     if(bigendian) for(int i=0;i<input_size*3;i+=3)
+     {
+-        int temp=(input[i+2]<<24)|(input[i+1]<<16)|(input[i]<<8);
++        int temp=(input[i+2]<<8)|(input[i+1]<<16)|(input[i]<<24);
+         output[k++]=temp/(float)(INT_MAX-256);
+     }
+     else for(int i=0;i<input_size*3;i+=3)
+     {
+-        int temp=(input[i+2]<<8)|(input[i+1]<<16)|(input[i]<<24);
++        int temp=(input[i+2]<<24)|(input[i+1]<<16)|(input[i]<<8);
+         output[k++]=temp/(float)(INT_MAX-256);
+     }
+ }

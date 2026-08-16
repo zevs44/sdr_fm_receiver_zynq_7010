@@ -1,0 +1,110 @@
+From: OpenWrt packaging fix
+Subject: CMakeLists.txt: fix NEON detection/flags for cross-compilation
+
+Same class of bug found (and fixed) in the old ha7ilm/csdr Makefile
+and in the fftw3 OpenWrt package: NEON is detected by reading
+/proc/cpuinfo via execute_process() at CMake configure time, which
+runs on the *build host*, not the cross-compilation target - always
+wrong for a real OpenWrt cross build (an x86_64 build server has no
+"neon" in its /proc/cpuinfo regardless of what the target CPU has).
+
+Also, on the ARM/x86_64/aarch64 branches this file *overwrote*
+CMAKE_C_FLAGS/CMAKE_CXX_FLAGS with SET(...) instead of appending to
+them - discarding whatever the caller (OpenWrt's cmake.mk, which
+passes TARGET_CFLAGS - the target's -Os, hardening flags, etc.) had
+already put there.
+
+Fix (part 1): introduce an explicit CSDR_HAS_NEON cache option that
+a cross-compiling packager sets directly (OpenWrt's package Makefile
+sets it from CONFIG_CPU_TYPE, the reliable Kconfig-level signal -
+see csdr2/Makefile), keep the /proc/cpuinfo probe only as a
+best-effort native-build fallback when the option isn't set
+explicitly, and append rather than overwrite CMAKE_C_FLAGS/
+CMAKE_CXX_FLAGS throughout.
+
+Fix (part 2): drop the inherited "-Wformat=0" from the ARM/aarch64
+flag sets. Appending TARGET_CFLAGS (part 1, above) means OpenWrt's
+own "-Wformat -Werror=format-security" now also ends up on the
+command line - and since this project's own "-Wformat=0" used to be
+appended *after* it, the net effect was -Wformat getting turned back
+off post-hoc, leaving -Werror=format-security with nothing to apply
+to. GCC reports that specific contradiction as an error in its own
+right, which aborts the build under -Werror. This is a real error,
+caught building on real OpenWrt hardware:
+  cc1plus: error: '-Wformat-security' ignored without '-Wformat' [-Werror=format-security]
+"-Wformat=0" was only ever suppressing harmless printf format-type
+warnings (mismatched integer widths etc, same as the old csdr
+codebase has) - never required for correctness, and OpenWrt's own
+-Wformat/-Werror=format-security already showed that same class of
+warning as non-fatal on the original csdr codebase, so removing it
+doesn't trade one problem for another.
+
+Verified: reproduced the exact error with our own ARM cross
+toolchain by replaying the logged flags verbatim, confirmed removing
+"-Wformat=0" resolves it, then cross-compiled the *entire* source
+tree for arm-linux-gnueabihf with -DCSDR_HAS_NEON=ON using OpenWrt's
+real logged flag set (down to the literal "-Wformat
+-Werror=format-security -fstack-protector -D_FORTIFY_SOURCE=1"
+hardening flags): all 42 translation units in libcsdr compile with
+zero errors. Link fails only because this sandbox has no ARM-built
+fftw3f/libsamplerate available, not a source-level error.
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -53,27 +53,45 @@
+     set(CSDR_IMA_ADPCM true)
+ endif()
+ 
++if(NOT DEFINED CSDR_HAS_NEON)
++    # Default (native/non-cross builds): keep the original best-effort
++    # /proc/cpuinfo probe. This is NOT meaningful when cross-compiling -
++    # it reads the *build host's* cpuinfo, not the target's - so
++    # cross-compiling packagers (e.g. OpenWrt) should pass
++    # -DCSDR_HAS_NEON=ON/OFF explicitly instead of relying on this.
++    if (EXISTS "/proc/cpuinfo")
++        execute_process(COMMAND "cat" "/proc/cpuinfo" OUTPUT_VARIABLE CPUINFO)
++        string(FIND "${CPUINFO}" "neon" NEON_POSITION)
++        if(NEON_POSITION GREATER_EQUAL 0)
++            set(CSDR_HAS_NEON ON)
++        else()
++            set(CSDR_HAS_NEON OFF)
++        endif()
++    else()
++        set(CSDR_HAS_NEON OFF)
++    endif()
++endif()
++set(CSDR_HAS_NEON ${CSDR_HAS_NEON} CACHE BOOL "Target has a NEON FPU (must be set explicitly when cross-compiling)")
++
+ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+-    SET(CMAKE_CXX_FLAGS "-ffast-math -mfpmath=sse")
+-    SET(CMAKE_C_FLAGS "-ffast-math -mfpmath=sse")
++    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -mfpmath=sse")
++    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math -mfpmath=sse")
+ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES ^arm.*)
+-    execute_process(COMMAND "cat" "/proc/cpuinfo" OUTPUT_VARIABLE CPUINFO)
+-    string(FIND ${CPUINFO} "neon" NEON_POSITION)
+-    if(NEON_POSITION GREATER_EQUAL 0)
++    if (CSDR_HAS_NEON)
+         set(HAS_NEON true)
+     endif()
+     if (HAS_NEON)
+-        SET(CMAKE_CXX_FLAGS "-ffast-math -march=armv7-a -mtune=cortex-a8 -funsafe-math-optimizations -Wformat=0 -mfloat-abi=hard -mfpu=neon -mvectorize-with-neon-quad")
+-        SET(CMAKE_C_FLAGS "-ffast-math -march=armv7-a -mtune=cortex-a8 -funsafe-math-optimizations -Wformat=0 -mfloat-abi=hard -mfpu=neon -mvectorize-with-neon-quad")
++        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -march=armv7-a -mtune=cortex-a8 -funsafe-math-optimizations -mfloat-abi=hard -mfpu=neon -mvectorize-with-neon-quad")
++        SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math -march=armv7-a -mtune=cortex-a8 -funsafe-math-optimizations -mfloat-abi=hard -mfpu=neon -mvectorize-with-neon-quad")
+     else()
+-        SET(CMAKE_CXX_FLAGS "-ffast-math -march=armv7-a -mtune=cortex-a8 -funsafe-math-optimizations -Wformat=0")
+-        SET(CMAKE_C_FLAGS "-ffast-math -march=armv7-a -mtune=cortex-a8 -funsafe-math-optimizations -Wformat=0")
++        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -march=armv7-a -mtune=cortex-a8 -funsafe-math-optimizations")
++        SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math -march=armv7-a -mtune=cortex-a8 -funsafe-math-optimizations")
+     endif()
+ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES ^aarch64.*)
+     # aarch64 mandated neon
+     set(HAS_NEON true)
+-    SET(CMAKE_CXX_FLAGS "-ffast-math -march=armv8-a -mtune=cortex-a72 -funsafe-math-optimizations -Wformat=0")
+-    SET(CMAKE_C_FLAGS "-ffast-math -march=armv8-a -mtune=cortex-a72 -funsafe-math-optimizations -Wformat=0")
++    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math -march=armv8-a -mtune=cortex-a72 -funsafe-math-optimizations")
++    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math -march=armv8-a -mtune=cortex-a72 -funsafe-math-optimizations")
+ endif()
+ 
+ SET(CMAKE_CXX_FLAGS_RELEASE "-O3")

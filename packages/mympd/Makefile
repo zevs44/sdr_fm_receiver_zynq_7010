@@ -1,0 +1,106 @@
+#
+# Copyright (C) 2021-2023 Tomasz Maciej Nowak <tmn505@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+# myMPD (c) 2018-2026 Juergen Mang <mail@jcgames.de>
+# https://github.com/jcorporation/mympd
+
+include $(TOPDIR)/rules.mk
+
+PKG_NAME := mympd
+PKG_VERSION := 25.3.0
+PKG_RELEASE := 1
+
+PKG_SOURCE := $(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL := https://codeload.github.com/jcorporation/myMPD/tar.gz/refs/tags/v$(PKG_VERSION)?
+PKG_HASH := skip
+
+PKG_LICENSE := GPL-3.0
+PKG_LICENSE_FILE := LICENSE.md
+
+PKG_MAINTAINER := Juergen Mang <mail [at] jcgames [dot] de>
+
+PKG_BUILD_DIR := $(BUILD_DIR)/myMPD-$(PKG_VERSION)
+PKG_BUILD_FLAGS := no-mips16
+PKG_BUILD_PARALLEL := 1
+PKG_ASLR_PIE_REGULAR := 1
+PKG_FORTIFY_SOURCE := 0
+PKG_USE_NINJA := 0
+PKG_CONFIG_DEPENDS := \
+    CONFIG_MYMPD_FLAC \
+    CONFIG_MYMPD_ID3TAG \
+    CONFIG_MYMPD_LUA
+
+# Build-time staging dependency: without this, an isolated
+# `make package/mympd/{clean,compile}` is not guaranteed to have
+# lua5.4's headers/.so in staging_dir before cmake's find_package(Lua) runs.
+# The /host variant provides luac5.4, which myMPD's own build.sh needs
+# on PATH to precompile its bundled Lua libraries (mympd.lua/json.lua)
+# with the matching bytecode format.
+PKG_BUILD_DEPENDS := $(if $(CONFIG_MYMPD_LUA),lua5.4 lua5.4/host)
+
+CMAKE_BINARY_SUBDIR := release
+
+include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/cmake.mk
+
+define Package/mympd
+  SECTION := sound
+  CATEGORY := Sound
+  TITLE := myMPD - web MPD client and more
+  URL := https://jcorporation.github.io
+  DEPENDS := +libpcre2 +MYMPD_FLAC:libflac +MYMPD_ID3TAG:libid3tag +MYMPD_LUA:liblua5.4 +libopenssl
+  USERID := mympd:mympd
+endef
+
+define Package/mympd/description
+Standalone and mobile friendly web MPD client with a tiny footprint and advanced features.
+endef
+
+define Package/mympd/config
+    if PACKAGE_mympd
+
+        config MYMPD_FLAC
+            bool "Extracting cover images from FLAC files"
+            default y
+
+        config MYMPD_ID3TAG
+            bool "Extracting cover images from ID3 tags"
+            default y
+
+        config MYMPD_LUA
+            bool "LUA scripts support"
+            default n
+
+    endif
+endef
+
+CMAKE_OPTIONS += \
+    -DMYMPD_ENABLE_FLAC=$(if $(CONFIG_MYMPD_FLAC),ON,OFF) \
+    -DMYMPD_ENABLE_LIBID3TAG=$(if $(CONFIG_MYMPD_ID3TAG),ON,OFF) \
+    -DMYMPD_ENABLE_LUA=$(if $(CONFIG_MYMPD_LUA),ON,OFF) \
+    $(if $(CONFIG_MYMPD_LUA),-DLUA_INCLUDE_DIR=$(STAGING_DIR)/usr/include/lua5.4 -DLUA_LIBRARY=$(STAGING_DIR)/usr/lib/liblua5.4.so)
+
+# myMPD's CMakeLists.txt calls plain find_package(Lua) with no version
+# constraint. The stock OpenWrt "lua" package (5.1.5, needed by LuCI)
+# installs its header unversioned straight into usr/include/lua.h, and
+# CMake's FindLua.cmake tries that bare path *before* any versioned
+# "lua5.4" subdirectory, so it wins the search even though it's too
+# old -- myMPD then disables Lua itself. Forcing LUA_INCLUDE_DIR/
+# LUA_LIBRARY above bypasses that search entirely. Verified locally by
+# reproducing both Lua installs in one prefix and confirming CMake
+# picks liblua.so 5.1.5 without the override, liblua5.4.so with it.
+
+define Package/mympd/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mympd $(1)/usr/bin/
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mympd-config $(1)/usr/bin/
+	$(if $(CONFIG_MYMPD_LUA),$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mympd-script $(1)/usr/bin/)
+
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/mympd.config $(1)/etc/config/mympd
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/mympd.init $(1)/etc/init.d/mympd
+endef
+
+$(eval $(call BuildPackage,mympd))

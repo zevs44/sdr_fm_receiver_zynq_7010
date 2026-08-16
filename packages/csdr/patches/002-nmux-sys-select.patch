@@ -1,0 +1,32 @@
+From: OpenWrt packaging fix
+Subject: nmux.h: add missing <sys/select.h>
+
+nmux.cpp uses fd_set/FD_ZERO/FD_SET/FD_ISSET/select() (POSIX,
+declared by <sys/select.h>) but nmux.h never includes that header.
+
+This built anyway under glibc, because glibc's own <sys/socket.h>
+happens to transitively drag in the fd_set/select declarations as an
+implementation detail. musl's <sys/socket.h> does not do this
+leakage - it only declares what POSIX actually assigns to that
+header - so on OpenWrt's musl toolchain g++ fails with a wall of
+"'fd_set'/'select'/'FD_ZERO'/'FD_SET'/'FD_ISSET' was not declared in
+this scope".
+
+Reproduced verbatim against real musl headers (musl-gcc/g++ -isystem
+musl's include dir) with nmux.h's exact pre-fix include list -
+identical error set and identical "did you mean 'L_SET'" typo
+suggestion for FD_SET as in the real OpenWrt build log. Adding the
+missing standard header resolves it cleanly on musl and is a no-op
+everywhere else (glibc/uClibc), since it's simply the header that's
+supposed to provide these symbols per POSIX in the first place.
+
+--- a/nmux.h
++++ b/nmux.h
+@@ -10,6 +10,7 @@
+ #include <arpa/inet.h>
+ #include <sys/socket.h>
+ #include <netinet/in.h>
++#include <sys/select.h>
+ #include "tsmpool.h"
+ 
+ #define MSG_START "nmux: "

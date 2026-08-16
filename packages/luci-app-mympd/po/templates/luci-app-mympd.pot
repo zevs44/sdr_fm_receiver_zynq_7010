@@ -1,0 +1,506 @@
+# luci-app-mympd translation template
+# Copyright (C) 2026
+# This file is distributed under the same license as the luci-app-mympd package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-mympd 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-05 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Running"
+msgstr ""
+
+msgid "Stopped"
+msgstr ""
+
+msgid "Unknown"
+msgstr ""
+
+msgid "Starting"
+msgstr ""
+
+msgid "Stopping"
+msgstr ""
+
+msgid "Restarting"
+msgstr ""
+
+msgid "Please wait..."
+msgstr ""
+
+msgid "Done"
+msgstr ""
+
+msgid "Error"
+msgstr ""
+
+msgid "action completed successfully."
+msgstr ""
+
+msgid "Failed: "
+msgstr ""
+
+msgid "Close"
+msgstr ""
+
+msgid "Autostart enabled."
+msgstr ""
+
+msgid "Autostart disabled."
+msgstr ""
+
+msgid "Previous track."
+msgstr ""
+
+msgid "Error: "
+msgstr ""
+
+msgid "Playback toggled."
+msgstr ""
+
+msgid "Playback stopped."
+msgstr ""
+
+msgid "Next track."
+msgstr ""
+
+msgid "Queue cleared."
+msgstr ""
+
+msgid "Queue shuffled."
+msgstr ""
+
+msgid "Database update started."
+msgstr ""
+
+msgid "Full rescan started."
+msgstr ""
+
+msgid "Crossfade set to "
+msgstr ""
+
+msgid " seconds."
+msgstr ""
+
+msgid "Error setting crossfade."
+msgstr ""
+
+msgid "Output "
+msgstr ""
+
+msgid " enabled."
+msgstr ""
+
+msgid " disabled."
+msgstr ""
+
+msgid "No outputs found or mpc unavailable."
+msgstr ""
+
+msgid "enabled"
+msgstr ""
+
+msgid "disabled"
+msgstr ""
+
+msgid "Disable"
+msgstr ""
+
+msgid "Enable"
+msgstr ""
+
+msgid "Could not query outputs."
+msgstr ""
+
+msgid "Idle / stopped"
+msgstr ""
+
+msgid "mpc unavailable"
+msgstr ""
+
+msgid "MPD Library Statistics"
+msgstr ""
+
+msgid "No data."
+msgstr ""
+
+msgid "Not running"
+msgstr ""
+
+msgid "Error reading stats"
+msgstr ""
+
+msgid "mpd.conf saved. Restart MPD to apply."
+msgstr ""
+
+msgid "Save failed: "
+msgstr ""
+
+msgid "ALSA output saved. Restart MPD to apply."
+msgstr ""
+
+msgid "HTTP stream enabled. Restart MPD to apply."
+msgstr ""
+
+msgid "HTTP stream disabled. Restart MPD to apply."
+msgstr ""
+
+msgid "myMPD network settings saved. Restart myMPD to apply."
+msgstr ""
+
+msgid "Apply myMPD configuration?"
+msgstr ""
+
+msgid "Archive uploaded. Applying overwrites settings and restarts myMPD."
+msgstr ""
+
+msgid "Size: "
+msgstr ""
+
+msgid "Create backup: tar -czf backup.tar.gz -C /etc/mympd ."
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Applying..."
+msgstr ""
+
+msgid "Extracting archive..."
+msgstr ""
+
+msgid "Config restored and myMPD restarted."
+msgstr ""
+
+msgid "Extraction failed:"
+msgstr ""
+
+msgid "No output."
+msgstr ""
+
+msgid "Apply"
+msgstr ""
+
+msgid "Enable autostart"
+msgstr ""
+
+msgid "Disable autostart"
+msgstr ""
+
+msgid "Service"
+msgstr ""
+
+msgid "Start"
+msgstr ""
+
+msgid "Stop"
+msgstr ""
+
+msgid "Restart"
+msgstr ""
+
+msgid "Autostart"
+msgstr ""
+
+msgid "Resource Usage"
+msgstr ""
+
+msgid "Live CPU and RAM of MPD and myMPD. Refreshed every 5 s."
+msgstr ""
+
+msgid "myMPD Network"
+msgstr ""
+
+msgid "HTTP port and bind address, read from myMPD's state directory."
+msgstr ""
+
+msgid "Reading configuration..."
+msgstr ""
+
+msgid "myMPD Web Interface"
+msgstr ""
+
+msgid "Open"
+msgstr ""
+
+msgid "Open myMPD ->"
+msgstr ""
+
+msgid "myMPD"
+msgstr ""
+
+msgid "Feature-rich web client for MPD."
+msgstr ""
+
+msgid "MPD (Music Player Daemon)"
+msgstr ""
+
+msgid "The audio server managing playback and library."
+msgstr ""
+
+msgid "Now Playing"
+msgstr ""
+
+msgid "Track"
+msgstr ""
+
+msgid "Loading..."
+msgstr ""
+
+msgid "Volume"
+msgstr ""
+
+msgid "Playback"
+msgstr ""
+
+msgid "Prev"
+msgstr ""
+
+msgid "Play/Pause"
+msgstr ""
+
+msgid "Next"
+msgstr ""
+
+msgid "Modes"
+msgstr ""
+
+msgid "Repeat"
+msgstr ""
+
+msgid "Random"
+msgstr ""
+
+msgid "Single"
+msgstr ""
+
+msgid "Consume"
+msgstr ""
+
+msgid "Crossfade (sec)"
+msgstr ""
+
+msgid "Set"
+msgstr ""
+
+msgid "Queue"
+msgstr ""
+
+msgid "Actions"
+msgstr ""
+
+msgid "Clear queue"
+msgstr ""
+
+msgid "Shuffle queue"
+msgstr ""
+
+msgid "Library"
+msgstr ""
+
+msgid "Requires mpc."
+msgstr ""
+
+msgid "Database"
+msgstr ""
+
+msgid "Update (incremental)"
+msgstr ""
+
+msgid "Full rescan"
+msgstr ""
+
+msgid "Statistics"
+msgstr ""
+
+msgid "Audio Outputs"
+msgstr ""
+
+msgid "Enable/disable MPD audio outputs."
+msgstr ""
+
+msgid "Outputs"
+msgstr ""
+
+msgid "ALSA Audio Output"
+msgstr ""
+
+msgid "Configure the ALSA audio_output block in mpd.conf."
+msgstr ""
+
+msgid "Detecting ALSA devices..."
+msgstr ""
+
+msgid "HTTP Audio Stream"
+msgstr ""
+
+msgid "Built-in HTTP streaming output. Tune in at http://<router>:<port>."
+msgstr ""
+
+msgid "Reading mpd.conf..."
+msgstr ""
+
+msgid "MPD Directories & Paths"
+msgstr ""
+
+msgid "File and directory paths in /etc/mpd.conf."
+msgstr ""
+
+msgid "MPD General Settings"
+msgstr ""
+
+msgid "Network, logging and behaviour options in /etc/mpd.conf."
+msgstr ""
+
+msgid "Restore myMPD Configuration"
+msgstr ""
+
+msgid "Upload a .tar.gz backup: tar -czf backup.tar.gz -C /etc/mympd ."
+msgstr ""
+
+msgid "This overwrites myMPD settings and restarts the service."
+msgstr ""
+
+msgid "Archive"
+msgstr ""
+
+msgid "myMPD Manager"
+msgstr ""
+
+msgid "Manage myMPD & MPD: services, playback, outputs, ALSA, HTTP stream, paths and backup."
+msgstr ""
+
+msgid "HTTP Port"
+msgstr ""
+
+msgid "Bind interface"
+msgstr ""
+
+msgid "Save network settings"
+msgstr ""
+
+msgid "Restart myMPD after saving."
+msgstr ""
+
+msgid "Read failed: "
+msgstr ""
+
+msgid "No ALSA devices found (aplay -l)"
+msgstr ""
+
+msgid "Audio device"
+msgstr ""
+
+msgid "Mixer type"
+msgstr ""
+
+msgid "Mixer device"
+msgstr ""
+
+msgid "Mixer control"
+msgstr ""
+
+msgid "Save ALSA output"
+msgstr ""
+
+msgid "Restart MPD after saving."
+msgstr ""
+
+msgid "Enable streaming"
+msgstr ""
+
+msgid "Active"
+msgstr ""
+
+msgid "Stream port"
+msgstr ""
+
+msgid "Encoder"
+msgstr ""
+
+msgid "Bitrate"
+msgstr ""
+
+msgid "Format"
+msgstr ""
+
+msgid "Save HTTP stream"
+msgstr ""
+
+msgid "Error reading config: "
+msgstr ""
+
+msgid "Music directory"
+msgstr ""
+
+msgid "Playlist directory"
+msgstr ""
+
+msgid "Database file"
+msgstr ""
+
+msgid "Log file"
+msgstr ""
+
+msgid "PID file"
+msgstr ""
+
+msgid "State file"
+msgstr ""
+
+msgid "Sticker database"
+msgstr ""
+
+msgid "Cache directory"
+msgstr ""
+
+msgid "Bind address"
+msgstr ""
+
+msgid "MPD port"
+msgstr ""
+
+msgid "Log level"
+msgstr ""
+
+msgid "Restore paused"
+msgstr ""
+
+msgid "Auto-update library"
+msgstr ""
+
+msgid "Follow outside symlinks"
+msgstr ""
+
+msgid "Follow inside symlinks"
+msgstr ""
+
+msgid "Zeroconf enabled"
+msgstr ""
+
+msgid "Zeroconf name"
+msgstr ""
+
+msgid "ReplayGain mode"
+msgstr ""
+
+msgid "Volume normalization"
+msgstr ""
+
+msgid "Samplerate converter"
+msgstr ""
+
+msgid "Save paths"
+msgstr ""
+
+msgid "Save settings"
+msgstr ""
+

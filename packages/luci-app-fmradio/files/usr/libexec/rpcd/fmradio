@@ -1,0 +1,477 @@
+#!/bin/sh
+. /usr/share/libubox/jshn.sh
+
+# rpcd spawns this script with a minimal environment — its PATH can differ
+# from an interactive SSH shell's PATH. If rds-ctl or GNU coreutils' timeout
+# aren't on it, calls silently fail differently here than when run by hand.
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+RADIO_DEV=/dev/radio0
+
+# Tuner access lives in one shared file, because /etc/init.d/fmradio has to
+# apply exactly the same settings and the two copies this replaced are how they
+# drift apart. Control names are the driver's own -- see that file's header.
+FM_RADIO_DEV="$RADIO_DEV"
+. /usr/share/fmradio/v4l2.sh
+
+SCAN_STATUS_FILE=/tmp/fmradio_scan.status
+SCAN_PID_FILE=/tmp/fmradio_scan.pid
+
+# Written continuously by /usr/libexec/fmradio-rdsd — see that script's header
+# for why RDS is no longer read by blocking this backend for ten seconds per
+# request.
+RDS_STATE_FILE=/tmp/fmradio_rds.state
+RDS_FLUSH_MARK=/tmp/fmradio_rds.flush
+RDS_PID_FILE=/tmp/fmradio_rdsd.pid
+RDS_DAEMON=/usr/libexec/fmradio-rdsd
+
+# Is the reader daemon actually up? The pid file alone is not enough: it
+# survives a crash or a reboot and can then name a recycled, unrelated pid, so
+# the process is confirmed to be the daemon before it is trusted.
+_rds_daemon_alive() {
+    local pid
+    [ -f "$RDS_PID_FILE" ] || return 1
+    pid=$(tr -cd '0-9' < "$RDS_PID_FILE" 2>/dev/null)
+    [ -n "$pid" ] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    grep -qs 'fmradio-rdsd' "/proc/$pid/cmdline" 2>/dev/null
+}
+
+# Cached PS/PI/RT describe the station that was tuned when they arrived, so
+# every retune drops them. Dropping the state file alone would not be enough
+# (the running parser holds its own copy in memory and would just republish
+# it), hence the marker the parser watches for.
+_rds_flush() {
+    rm -f "$RDS_STATE_FILE"
+    : > "$RDS_FLUSH_MARK" 2>/dev/null
+}
+
+# Tuner band limits — keep in sync with FM_MIN/FM_MAX in main.js
+FM_MIN_MHZ=76.0
+FM_MAX_MHZ=108.0
+
+case "$1" in
+    list)
+        echo '{"get_info":{},"get_freq":{},"set_freq":{"freq":"string"},"seek":{"up":"string"},"scan":{},"scan_status":{},"get_ctrl":{},"set_ctrl":{"name":"string","value":"string"},"get_rds":{},"apply_settings":{}}'
+        exit 0
+        ;;
+
+    call)
+        action="$2"
+        case "$action" in
+
+            # ── get_info ────────────────────────────────────────────────────
+            get_info)
+                tuner_out=$(v4l2-ctl -d "$RADIO_DEV" --get-tuner   2>&1)
+                ctrls_out=$(v4l2-ctl -d "$RADIO_DEV" --list-ctrls  2>&1)
+                all_out=$(  v4l2-ctl -d "$RADIO_DEV" --all          2>&1)
+                json_init
+                json_add_string "tuner" "$tuner_out"
+                json_add_string "ctrls" "$ctrls_out"
+                json_add_string "all"   "$all_out"
+                json_dump
+                exit 0
+                ;;
+
+            # ── get_freq ────────────────────────────────────────────────────
+            get_freq)
+                freq_raw=$(v4l2-ctl -d "$RADIO_DEV" --get-freq 2>/dev/null)
+                freq_clean=$(printf '%s\n' "$freq_raw" \
+                    | grep -oE '[0-9]+\.[0-9]+[[:space:]]+MHz' \
+                    | awk '{print $1}')
+                [ -z "$freq_clean" ] && freq_clean="unknown"
+
+                tuner_raw=$(v4l2-ctl -d "$RADIO_DEV" --get-tuner 2>/dev/null)
+                signal_clean=$(printf '%s\n' "$tuner_raw" \
+                    | grep "Signal strength" \
+                    | grep -oE '[0-9]+%')
+                [ -z "$signal_clean" ] && signal_clean="0%"
+
+                json_init
+                json_add_string "freq"   "$freq_clean"
+                json_add_string "signal" "$signal_clean"
+                json_dump
+                exit 0
+                ;;
+
+            # ── set_freq ────────────────────────────────────────────────────
+            set_freq)
+                raw_json=$(cat)
+                freq=""
+                [ -n "$raw_json" ] && json_load "$raw_json" && json_get_var freq freq
+                # Strip everything except digits and dot
+                freq=$(printf '%s' "$freq" | tr -cd '0-9.')
+
+                # The filter above still lets malformed values like "1.2.3"
+                # through, and nothing here bounded the value to the tuner's
+                # band. Validate the shape and clamp before handing it over.
+                if [ -n "$freq" ]; then
+                    freq=$(awk -v f="$freq" -v lo="$FM_MIN_MHZ" -v hi="$FM_MAX_MHZ" 'BEGIN{
+                        if (f !~ /^[0-9]+(\.[0-9]+)?$/) exit 1
+                        n = f + 0
+                        if (n < lo) n = lo
+                        if (n > hi) n = hi
+                        printf "%.1f", n
+                    }') || freq=""
+                fi
+
+                if [ -n "$freq" ]; then
+                    res=$(v4l2-ctl -d "$RADIO_DEV" --set-freq="$freq" 2>&1)
+                    rc=$?
+                    [ "$rc" = "0" ] && _rds_flush
+                else
+                    res="Invalid frequency"
+                    rc=1
+                fi
+
+                json_init
+                json_add_string "result" "$res"
+                json_add_int    "code"   "$rc"
+                json_dump
+                exit 0
+                ;;
+
+            # ── seek ────────────────────────────────────────────────────────
+            seek)
+                raw_json=$(cat)
+                up=""
+                [ -n "$raw_json" ] && json_load "$raw_json" && json_get_var up up
+                [ "$up" = "1" ] && dir=1 || dir=0
+                res=$(v4l2-ctl -d "$RADIO_DEV" --freq-seek=dir="$dir" 2>&1)
+                _rds_flush
+                json_init
+                json_add_string "result" "$res"
+                json_dump
+                exit 0
+                ;;
+
+            # ── scan_status ─────────────────────────────────────────────────
+            scan_status)
+                status="idle"
+                count=0
+
+                if [ -f "$SCAN_STATUS_FILE" ]; then
+                    # Safe line-by-line read instead of sourcing arbitrary file
+                    while IFS='=' read -r key val; do
+                        case "$key" in
+                            status) status="$val" ;;
+                            count)  count="$val"  ;;
+                        esac
+                    done < "$SCAN_STATUS_FILE"
+                fi
+
+                # Sanitise values
+                case "$status" in
+                    running|completed|failed|idle) ;;
+                    *) status="idle" ;;
+                esac
+                count=$(printf '%s' "$count" | tr -cd '0-9')
+                [ -z "$count" ] && count=0
+
+                # A scan is only really finished if its background job has
+                # exited. The previous check here was `pidof v4l2-ctl`, which
+                # was wrong: the scan loop sleeps between v4l2-ctl invocations,
+                # so a poll landing in one of those gaps found no process and
+                # reported "failed" — the UI read that as "not running", showed
+                # "Scan complete!" and reloaded the page mid-scan.
+                # Only a PID file that exists AND names a dead process proves
+                # the scan died. A *missing* PID file must not count as death:
+                # the file is written by the parent just after forking, so a
+                # poll landing in that window used to report "failed", which
+                # the UI reads as "finished" — it then showed "Scan complete!"
+                # and reloaded the page mid-scan, the very bug the check was
+                # added to prevent. Erring the other way at worst leaves the
+                # UI showing "running" until the user starts another scan,
+                # which the scan handler already recovers from.
+                if [ "$status" = "running" ] && [ -f "$SCAN_PID_FILE" ]; then
+                    spid=$(tr -cd '0-9' < "$SCAN_PID_FILE" 2>/dev/null)
+                    if [ -z "$spid" ] || ! kill -0 "$spid" 2>/dev/null; then
+                        status="failed"
+                    fi
+                fi
+
+                json_init
+                json_add_string "status" "$status"
+                json_add_int    "count"  "$count"
+                json_dump
+                exit 0
+                ;;
+
+            # ── scan ────────────────────────────────────────────────────────
+            scan)
+                # Prevent duplicate scans. Checking the status flag alone was
+                # not enough: a scan killed mid-run (crash, reboot, rpcd
+                # restart) leaves status=running behind forever, permanently
+                # wedging Auto-Scan. Confirm the job is genuinely alive.
+                if [ -f "$SCAN_STATUS_FILE" ]; then
+                    scan_status_val=""
+                    while IFS='=' read -r key val; do
+                        [ "$key" = "status" ] && scan_status_val="$val"
+                    done < "$SCAN_STATUS_FILE"
+
+                    if [ "$scan_status_val" = "running" ]; then
+                        spid=""
+                        [ -f "$SCAN_PID_FILE" ] && spid=$(tr -cd '0-9' < "$SCAN_PID_FILE" 2>/dev/null)
+                        if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then
+                            json_init
+                            json_add_string "result" "already_running"
+                            json_dump
+                            exit 0
+                        fi
+                        # Stale lock — fall through and start a fresh scan.
+                    fi
+                fi
+
+                # Wipe old station entries created by a previous scan
+                for sid in $(uci show fmradio | grep "=station$" | cut -d. -f2 | cut -d= -f1); do
+                    nm=$(uci -q get "fmradio.${sid}.name")
+                    case "$nm" in AutoScan*) uci del "fmradio.${sid}" ;; esac
+                done
+                uci commit fmradio
+
+                scan_max_khz=$(awk "BEGIN{printf \"%d\", $FM_MAX_MHZ * 1000}")
+
+                # Publish "running" before forking, and drop any PID file left
+                # behind by an earlier run — a stale PID can otherwise be
+                # reused by an unrelated live process and read as "alive".
+                rm -f "$SCAN_PID_FILE"
+                printf 'status=running\ncount=0\n' > "$SCAN_STATUS_FILE"
+                _rds_flush
+
+                # Background scan job
+                (
+                    v4l2-ctl -d "$RADIO_DEV" --set-freq="$FM_MIN_MHZ" >/dev/null 2>&1
+                    count=0
+                    last_f_khz=$(awk "BEGIN{printf \"%d\", $FM_MIN_MHZ * 1000}")
+                    i=0
+
+                    while [ "$i" -lt 50 ]; do
+                        i=$((i + 1))
+                        next_start_f=$(awk "BEGIN{printf \"%.1f\", ($last_f_khz + 100) / 1000}")
+                        v4l2-ctl -d "$RADIO_DEV" --set-freq="$next_start_f" >/dev/null 2>&1
+                        sleep 0.2
+                        v4l2-ctl -d "$RADIO_DEV" --freq-seek=dir=1 >/dev/null 2>&1
+                        sleep 0.5
+
+                        freq_out=$(v4l2-ctl -d "$RADIO_DEV" --get-freq 2>&1)
+                        f_mhz_raw=$(printf '%s\n' "$freq_out" \
+                            | awk 'match($0,/[0-9]+\.[0-9]+[[:space:]]+MHz/){
+                                    s=substr($0,RSTART,RLENGTH); sub(/ +MHz/,"",s); print s; exit}')
+                        [ -z "$f_mhz_raw" ] && break
+
+                        # v4l2-ctl prints the frequency with full %f precision
+                        # (e.g. "101.900000") — round to one decimal before it
+                        # ends up in the station name and the stored freq.
+                        f_mhz=$(awk "BEGIN{printf \"%.1f\", $f_mhz_raw}")
+
+                        f_khz=$(awk "BEGIN{printf \"%d\", $f_mhz * 1000}")
+                        if [ "$f_khz" -le "$last_f_khz" ] || [ "$f_khz" -gt "$scan_max_khz" ]; then
+                            break
+                        fi
+
+                        sid=$(uci add fmradio station)
+                        uci set "fmradio.${sid}.name=AutoScan ${f_mhz}"
+                        uci set "fmradio.${sid}.freq=${f_mhz}"
+                        last_f_khz="$f_khz"
+                        count=$((count + 1))
+                        printf 'status=running\ncount=%d\n' "$count" > "$SCAN_STATUS_FILE"
+                    done
+
+                    uci commit fmradio
+                    printf 'status=completed\ncount=%d\n' "$count" > "$SCAN_STATUS_FILE"
+                    rm -f "$SCAN_PID_FILE"
+                ) &
+
+                # Record the job's PID so scan_status can tell "still working"
+                # from "died" without guessing from transient child processes.
+                echo $! > "$SCAN_PID_FILE"
+
+                json_init
+                json_add_string "result" "started"
+                json_dump
+                exit 0
+                ;;
+
+            # ── get_ctrl ────────────────────────────────────────────────────
+            # Current values of volume, mute, loudness, rds_reception,
+            # de_emphasis (1 = 50 us, 2 = 75 us) and audmode (mono/stereo).
+            get_ctrl)
+                # One read for everything; names and units are the tuner's, so
+                # the values go straight out as they came in.
+                volume=$(fm_ctrl_default volume)
+                mute=$(fm_ctrl_default mute)
+                loudness=$(fm_ctrl_default loudness)
+                rds_reception=$(fm_ctrl_default rds_reception)
+                de_emphasis=$(fm_ctrl_default de_emphasis)
+                audmode=stereo
+
+                while IFS='=' read -r key val; do
+                    case "$key" in
+                        volume)        volume="$val"        ;;
+                        mute)          mute="$val"          ;;
+                        loudness)      loudness="$val"      ;;
+                        rds_reception) rds_reception="$val" ;;
+                        de_emphasis)   de_emphasis="$val"   ;;
+                        audmode)       audmode="$val"       ;;
+                    esac
+                done <<EOF
+$(fm_ctrl_get_all)
+EOF
+
+                json_init
+                json_add_int    "volume"        "$volume"
+                json_add_int    "mute"          "$mute"
+                json_add_int    "loudness"      "$loudness"
+                json_add_int    "rds_reception" "$rds_reception"
+                json_add_int    "de_emphasis"   "$de_emphasis"
+                json_add_string "audmode"       "$audmode"
+                json_dump
+                exit 0
+                ;;
+
+            # ── set_ctrl ────────────────────────────────────────────────────
+            # name is one of volume, mute, loudness, rds_reception,
+            # de_emphasis, audmode. fm_ctrl_sanitize() whitelists both the name
+            # and the value, so there is no second copy of that list here to
+            # fall out of step with the tuner's.
+            set_ctrl)
+                raw_json=$(cat)
+                ctrl_name=""
+                ctrl_value=""
+                [ -n "$raw_json" ] && json_load "$raw_json" \
+                    && json_get_var ctrl_name  name \
+                    && json_get_var ctrl_value value
+
+                res=$(fm_ctrl_set "$ctrl_name" "$ctrl_value")
+                rc=$?
+                json_init
+                json_add_string "result" "$res"
+                json_add_int    "code"   "$rc"
+                json_dump
+                # Exit 0 even on failure: rpcd drops the payload of a call that
+                # exits non-zero, and the UI needs to read "code" to know what
+                # went wrong.
+                exit 0
+                ;;
+
+            # ── get_rds ─────────────────────────────────────────────────────
+            # Returns whatever the reader daemon has decoded so far, straight
+            # from its cache — this call no longer touches the tuner and no
+            # longer blocks. The old implementation ran
+            #     timeout -s INT 10 rds-ctl -R --verbose
+            # per request, which is why the UI's 1 s poll really refreshed
+            # every ~10 s and every refresh threw away the block sync rds-ctl
+            # had just achieved.
+            #
+            # `live` says whether the daemon is running; `seq` increments only
+            # when a field actually changed, so the UI can distinguish fresh
+            # data from the same snapshot re-read. If the daemon is not up the
+            # old one-shot path still runs (via the daemon's own --once mode,
+            # so there is exactly one parser in the package), which keeps the
+            # panel working — just as slowly as before.
+            get_rds)
+                if ! _rds_daemon_alive; then
+                    [ -x "$RDS_DAEMON" ] && "$RDS_DAEMON" --once >/dev/null 2>&1
+                    live=0
+                else
+                    live=1
+                fi
+
+                pi=""; ps=""; rt=""; pty=""; area=""; ms=""; ecc=""; di=""; tpta=""
+                stat_blocks=""; stat_errors=""; stat_corrected=""; seq=0
+
+                if [ -f "$RDS_STATE_FILE" ]; then
+                    # Values may themselves contain '=', so only the first one
+                    # separates key from value — read assigns the whole
+                    # remainder of the line to the last variable.
+                    while IFS='=' read -r key val; do
+                        case "$key" in
+                            seq)            seq="$val" ;;
+                            pi)             pi="$val" ;;
+                            ps)             ps="$val" ;;
+                            rt)             rt="$val" ;;
+                            pty)            pty="$val" ;;
+                            area)           area="$val" ;;
+                            ms)             ms="$val" ;;
+                            ecc)            ecc="$val" ;;
+                            di)             di="$val" ;;
+                            tpta)           tpta="$val" ;;
+                            stat_blocks)    stat_blocks="$val" ;;
+                            stat_errors)    stat_errors="$val" ;;
+                            stat_corrected) stat_corrected="$val" ;;
+                        esac
+                    done < "$RDS_STATE_FILE"
+                fi
+
+                seq=$(printf '%s' "$seq" | tr -cd '0-9')
+                [ -z "$seq" ] && seq=0
+
+                # rds-ctl prints these two as one line -- "block errors / group
+                # errors: 0 (0.00%) / 5" -- and they mean different things, so
+                # split them out rather than letting the UI show the raw pair
+                # under a single "Errors" label. A non-zero group-error count
+                # with zero block errors is meaningful on its own: it means
+                # whole groups were discarded for arriving incomplete or out of
+                # order, not because any block failed its checkword.
+                stat_block_errors=""
+                stat_group_errors=""
+                if [ -n "$stat_errors" ]; then
+                    stat_block_errors=$(printf '%s' "$stat_errors" \
+                        | sed -e 's/[[:space:]]*\/.*$//' -e 's/[[:space:]]*$//')
+                    stat_group_errors=$(printf '%s' "$stat_errors" \
+                        | sed -e 's/^.*\/[[:space:]]*//' -e 's/[[:space:]]*$//')
+                fi
+
+                # Fields that couldn't be decoded are sent as empty strings.
+                # They used to carry the literal word "unknown", which the UI
+                # printed verbatim — a weak signal produced a panel reading
+                # "unknown" eight times over. Presentation is the UI's job:
+                # it renders empty values as an em-dash.
+
+                json_init
+                json_add_string "pi"                "$pi"
+                json_add_string "ps"                "$ps"
+                json_add_string "rt"                "$rt"
+                json_add_string "pty"               "$pty"
+                json_add_string "area"              "$area"
+                json_add_string "ms"                "$ms"
+                json_add_string "ecc"               "$ecc"
+                json_add_string "di"                "$di"
+                json_add_string "tpta"              "$tpta"
+                json_add_string "stat_blocks"       "$stat_blocks"
+                json_add_string "stat_errors"       "$stat_errors"
+                json_add_string "stat_block_errors" "$stat_block_errors"
+                json_add_string "stat_group_errors" "$stat_group_errors"
+                json_add_string "stat_corrected"    "$stat_corrected"
+                json_add_int    "seq"               "$seq"
+                json_add_int    "live"              "$live"
+                json_dump
+                exit 0
+                ;;
+
+            # ── apply_settings ───────────────────────────────────────────────
+            # Restores everything saved in UCI. Exposed over ubus for manual
+            # and UI use; at boot /etc/init.d/fmradio calls the same function
+            # directly rather than going through rpcd.
+            apply_settings)
+                applied=""
+                errors=""
+                while IFS='=' read -r key val; do
+                    case "$key" in
+                        applied) applied="$val" ;;
+                        errors)  errors="$val"  ;;
+                    esac
+                done <<EOF
+$(fm_apply_uci)
+EOF
+
+                json_init
+                json_add_string "applied" "$applied"
+                json_add_string "errors"  "$errors"
+                json_dump
+                exit 0
+                ;;
+
+        esac
+        ;;
+esac

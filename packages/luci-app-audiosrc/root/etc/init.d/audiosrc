@@ -1,0 +1,37 @@
+#!/bin/sh /etc/rc.common
+# /etc/init.d/audiosrc
+# Переигрывает последний выбранный источник в регистр i2s_axi_mux_top после
+# ребута/перепрошивки PL (reg_channel_select сбрасывается в 0 по AXI-ресету).
+#
+# Это одноразовое действие (записать регистр и выйти), а не демон, поэтому
+# USE_PROCD здесь не используется: без procd_open_instance procd получал бы
+# сервис с нулём инстансов. Обычный start()/rc.common - то, что нужно.
+
+START=95
+
+# common.sh НЕ сорсится на верхнем уровне: rc.common сорсит весь файл
+# целиком не только при реальном start - также при enable/disable и при
+# обработке образа сборочным тулингом, который читает скрипт из
+# стейджинг-директории по относительному пути. Абсолютный
+# /usr/lib/audiosrc/common.sh в такой момент резолвится не туда (или
+# вообще ни во что) - поэтому сорсим его лениво, только когда правда
+# запускаемся на полностью установленной системе.
+start() {
+	. /usr/lib/audiosrc/common.sh
+
+	local source idx
+	source="$(uci -q get audiosrc.settings.source)"
+	[ -n "$source" ] || source="radio"
+
+	idx="$(idx_for "$source")"
+	[ -n "$idx" ] || idx=0
+
+	write_reg "$idx" || {
+		logger -t audiosrc "failed to write channel select register for source '$source'"
+		return 1
+	}
+}
+
+reload() {
+	start
+}

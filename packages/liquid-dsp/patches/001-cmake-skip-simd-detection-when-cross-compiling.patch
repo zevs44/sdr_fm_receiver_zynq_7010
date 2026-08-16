@@ -1,0 +1,18 @@
+--- a/CMakeLists.txt	2026-07-27 20:23:39.557279930 +0000
++++ b/CMakeLists.txt	2026-07-27 20:23:39.566569241 +0000
+@@ -43,7 +43,14 @@
+ include (CheckSymbolExists)
+ 
+ # check for hardware acceleration
+-include(cmake/FindSIMD.cmake)
++# NOTE (OpenWrt): FindSIMD.cmake relies on CHECK_C/CXX_SOURCE_RUNS(), which
++# uses try_run() to execute a compiled test binary. That is not possible when
++# cross-compiling (the binary is built for the target arch, not the build
++# host), so skip detection entirely in that case and fall back to the
++# portable, non-SIMD dotprod implementation below.
++if(NOT CMAKE_CROSSCOMPILING)
++  include(cmake/FindSIMD.cmake)
++endif()
+ # TODO: check for FFTW
+ 
+ # global flags

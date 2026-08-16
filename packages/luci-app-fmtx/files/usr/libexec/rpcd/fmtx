@@ -1,0 +1,596 @@
+#!/bin/sh
+. /usr/share/libubox/jshn.sh
+
+# rpcd spawns this script with a minimal environment — its PATH can differ
+# from an interactive SSH shell's PATH (lesson learned on luci-app-fmradio).
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+# Absolute path on purpose: the binary (/usr/bin/fmtx), this rpcd backend
+# (/usr/libexec/rpcd/fmtx) and the init script (/etc/init.d/fmtx) all share
+# the name now, so nothing here should depend on PATH resolution order.
+FMTX_BIN=/usr/bin/fmtx
+RT_PID_FILE=/tmp/fmtx_rt.pid
+
+# Transmit band limits — fmtx only warns outside 76-108 MHz (it computes an
+# FTW from whatever -f is given), so this is the enforcing guard.
+TX_FREQ_MIN=76.0
+TX_FREQ_MAX=108.0
+
+# Deviation is peak kHz for a full-scale composite (register 0x0C is a Q8.8
+# gain, not a power-of-two shift; fmtx's -d does the conversion). fmtx
+# hard-rejects <10 kHz (near-certainly a leftover shift value from before
+# that change) and only warns above 80; 80 is the hard ceiling here instead,
+# because that is where a 250 kHz receive chain stops being able to
+# demodulate the composite at all, not just fmtx's general sanity threshold.
+TX_DEVIATION_MIN=10
+TX_DEVIATION_MAX=80
+
+# RDS station name (PS, group 0B): fmtx's fill_ps() copies at most 8 chars
+# into a fixed buffer (space-padded) — anything beyond that is silently
+# dropped, so the field is capped to match.
+TX_RDS_MAX_LEN=8
+
+# RDS PI code: 0..0xFFFF, decimal or 0x-prefixed hex (matches fmtx -P).
+TX_PI_MAX=65535
+
+# RDS PTY (Programme Type): 0..31 (matches fmtx -y).
+TX_PTY_MAX=31
+
+# RDS Extended Country Code (ECC): 0..0xFF, decimal or 0x-prefixed hex
+# (matches fmtx -C). Like PI/PTY this needs -t, but unlike them it has
+# nowhere to fit in a static frame once PS fills it — fmtx runs it as a
+# rotation daemon (same mechanism as -R), even with no RadioText text set.
+TX_ECC_MAX=255
+
+# RadioText (group 2A): fmtx's fill_rt() caps at 64 chars.
+TX_RT_MAX_LEN=64
+
+# ════════════════════════════════════════════════════════════════════════
+# Hardware backend — fmtx (package: fmtx, binary: /usr/bin/fmtx)
+#
+# fmtx is a one-shot CLI for every flag except -R/-C: each invocation mmaps
+# /dev/mem, reads the current CTRL register, applies only the flags passed
+# on that invocation's command line, and writes CTRL back once before
+# exiting. That read-modify-write happens per call, so firing -e, -s, -p
+# from separate UI actions is safe — each call preserves whatever the
+# others already set.
+#
+# -R/-C are different: they run in the foreground as a daemon (RadioText
+# needs up to 16 RDS segments and ECC needs a frame of its own, but the
+# hardware buffer holds only 4 groups, so fmtx rotates frames through it
+# until it receives SIGINT or SIGTERM, at which point it restores a clean PS
+# frame and exits). Every _tx_rt_* helper below exists to manage that
+# background process safely — tracking its PID, confirming the PID still
+# belongs to fmtx before signalling it, confirming it actually stops before
+# starting a replacement, and never leaving two copies racing over the same
+# registers.
+#
+# No decoding of fmtx's own -i register dump is attempted here (CTRL bit
+# layout and the FTW<->MHz fixed-point math are exactly the kind of "looks
+# right but wasn't tested against real hardware" logic that caused real bugs
+# on the receiver plugin). UCI remains the source of truth for the displayed
+# UI state for everything except "is the rotation daemon running", which is
+# a live process rather than a hardware register and is checked directly.
+# ════════════════════════════════════════════════════════════════════════
+
+_tx_set_enable() {         # $1 = "0" | "1"
+    $FMTX_BIN -e "$1" >/dev/null 2>&1
+}
+
+_tx_set_freq() {           # $1 = "NNN.NN" MHz, already clamped
+    $FMTX_BIN -f "$1" >/dev/null 2>&1
+}
+
+_tx_set_stereo() {         # $1 = "0" (mono) | "1" (stereo)
+    $FMTX_BIN -s "$1" >/dev/null 2>&1
+}
+
+_tx_set_preemphasis() {    # $1 = "0" (off) | "1" (50us) | "2" (75us)
+    $FMTX_BIN -p "$1" >/dev/null 2>&1
+}
+
+_tx_set_deviation() {      # $1 = kHz, already clamped to TX_DEVIATION_*
+    $FMTX_BIN -d "$1" >/dev/null 2>&1
+}
+
+# PS + optional PI + optional PTY, rebuilt as one frame (matches fmtx's own
+# requirement: -P/-y only take effect together with -t).
+_tx_set_rds_identity() {   # $1=ps $2=pi(may be empty) $3=pty(may be empty)
+    local ps="$1" pi="$2" pty="$3"
+    set -- -t "$ps"
+    [ -n "$pi" ]  && set -- "$@" -P "$pi"
+    [ -n "$pty" ] && set -- "$@" -y "$pty"
+    $FMTX_BIN "$@" >/dev/null 2>&1
+}
+
+_tx_get_info() {
+    $FMTX_BIN -i 2>&1
+}
+
+# ── Rotation daemon management (-R / -C) ───────────────────────────────
+
+# Confirms the PID is not just alive but still OUR process. A pid file that
+# outlives a reboot or a crash can name a recycled PID, and kill -TERM on
+# that would have signalled an unrelated process.
+_tx_rt_alive() {           # $1 = pid
+    local comm
+    [ -n "$1" ] || return 1
+    kill -0 "$1" 2>/dev/null || return 1
+    comm=$(cat "/proc/$1/comm" 2>/dev/null)
+    [ "$comm" = "fmtx" ]
+}
+
+_tx_rt_pid() {
+    [ -f "$RT_PID_FILE" ] || return 1
+    tr -cd '0-9' < "$RT_PID_FILE" 2>/dev/null
+}
+
+_tx_rt_status() {
+    local pid
+    pid=$(_tx_rt_pid)
+    if _tx_rt_alive "$pid"; then
+        echo running
+    else
+        echo stopped
+    fi
+}
+
+# Sends SIGTERM (fmtx's rotation loop treats it the same as Ctrl-C: wake
+# from the sleep, write back a clean PS frame, exit) and waits for the
+# process to actually be gone before returning — a caller starting a
+# replacement right after this must never race the old one's exit.
+_tx_rt_stop() {
+    local pid i
+    pid=$(_tx_rt_pid)
+    rm -f "$RT_PID_FILE"
+    _tx_rt_alive "$pid" || return 0
+
+    kill -TERM "$pid" 2>/dev/null
+    i=0
+    while [ "$i" -lt 20 ]; do              # up to ~2s (frame period is 360ms)
+        _tx_rt_alive "$pid" || return 0
+        sleep 0.1
+        i=$((i + 1))
+    done
+    kill -KILL "$pid" 2>/dev/null          # unresponsive — force it
+    return 0
+}
+
+# Returns non-zero if the daemon failed to come up. Previously this always
+# reported success because `echo $! > pidfile` cannot fail: a device with no
+# /dev/mem permission, no bitstream loaded or no AXI region would light the
+# UI up green while nothing was on air.
+_tx_rt_start() {   # $1=ps $2=rt(may be empty) $3=pi $4=pty $5=ecc
+    local ps="$1" rt="$2" pi="$3" pty="$4" ecc="$5" pid
+    _tx_rt_stop     # never let two copies race the same RDS registers
+
+    # Nothing to rotate: fmtx would exit immediately after writing the
+    # static PS frame and the "daemon" would be gone a moment later.
+    [ -n "$rt" ] || [ -n "$ecc" ] || return 1
+
+    (
+        set -- -t "$ps"
+        [ -n "$rt" ]  && set -- "$@" -R "$rt"
+        [ -n "$pi" ]  && set -- "$@" -P "$pi"
+        [ -n "$pty" ] && set -- "$@" -y "$pty"
+        [ -n "$ecc" ] && set -- "$@" -C "$ecc"
+        exec $FMTX_BIN "$@" >/dev/null 2>&1
+    ) &
+    pid=$!
+    echo "$pid" > "$RT_PID_FILE"
+
+    # fmtx fails within milliseconds when it fails at all (open/mmap), so a
+    # short settle is enough to tell "running" from "died on startup".
+    sleep 0.3
+    if _tx_rt_alive "$pid"; then
+        return 0
+    fi
+    rm -f "$RT_PID_FILE"
+    return 1
+}
+
+# The DI bit d0 in RDS segment 3 announces stereo/mono, and fmtx bakes it
+# into the frame at the moment the frame is built. Changing stereo on its
+# own therefore left the on-air RDS frame still claiming the old state, so
+# the identity is re-sent (or the rotation restarted) after a stereo change.
+_tx_refresh_rds_di() {
+    local ps pi pty ecc rt rt_active
+    ps=$(uci -q get fmtx.@settings[0].rds_text)
+    [ -n "$ps" ] || return 0
+    pi=$( uci -q get fmtx.@settings[0].pi)
+    pty=$(uci -q get fmtx.@settings[0].pty)
+    ecc=$(uci -q get fmtx.@settings[0].ecc)
+    if [ "$(_tx_rt_status)" = "running" ]; then
+        rt_active=$(uci -q get fmtx.@settings[0].radiotext_active)
+        rt=""
+        [ "$rt_active" = "1" ] && rt=$(uci -q get fmtx.@settings[0].radiotext)
+        _tx_rt_start "$ps" "$rt" "$pi" "$pty" "$ecc"
+    else
+        _tx_set_rds_identity "$ps" "$pi" "$pty"
+    fi
+}
+
+# ── Shared validators ──────────────────────────────────────────────────
+#
+# Numbers are converted with awk rather than the shell's own $(( )). In ash,
+# an arithmetic expansion that fails is a FATAL error that aborts the whole
+# script, and "09" is exactly such a failure (invalid octal) — so a PI of
+# "09" used to kill the rpcd call outright and return nothing at all. awk
+# also never reinterprets a leading zero as octal, and the result is
+# normalised back to 0xNN so fmtx's own strtoul(base 0) cannot disagree with
+# the value that was validated here.
+_num_of() {   # $1 = decimal or 0x-hex token -> decimal on stdout, empty if invalid
+    awk -v s="$1" 'BEGIN {
+        # Long tokens would overflow awk %d into a wrapped or negative value
+        # that could then pass a "-le max" range check.
+        if (length(s) > 10) exit 1
+        if (s ~ /^[0-9]+$/) { printf "%d", s + 0; exit 0 }
+        if (s ~ /^0[xX][0-9a-fA-F]+$/) {
+            h = substr(s, 3); n = 0
+            for (i = 1; i <= length(h); i++)
+                n = n * 16 + index("0123456789abcdef", tolower(substr(h, i, 1))) - 1
+            printf "%d", n
+            exit 0
+        }
+        exit 1
+    }' 2>/dev/null
+}
+
+_validate_hex_max() {   # $1=raw $2=max -> stdout: normalised 0xNN or empty
+    local raw num
+    raw=$(printf '%s' "$1" | tr -cd '0-9a-fA-FxX')
+    [ -n "$raw" ] || return 0
+    num=$(_num_of "$raw")
+    [ -n "$num" ] || return 0
+    [ "$num" -le "$2" ] || return 0
+    printf '0x%X' "$num"
+}
+
+_validate_pi() {   # $1=raw -> 0xNNNN or empty
+    _validate_hex_max "$1" "$TX_PI_MAX"
+}
+
+_validate_ecc() {  # $1=raw -> 0xNN or empty
+    _validate_hex_max "$1" "$TX_ECC_MAX"
+}
+
+_validate_pty() {  # $1=raw -> decimal 0..31 or empty
+    local raw num
+    raw=$(printf '%s' "$1" | tr -cd '0-9')
+    [ -n "$raw" ] || return 0
+    num=$(_num_of "$raw")
+    [ -n "$num" ] || return 0
+    [ "$num" -le "$TX_PTY_MAX" ] || return 0
+    printf '%d' "$num"
+}
+
+# Clamped fixed-point number, 2 decimals. 2 rather than 1 because the FM
+# grid is 0.05 MHz wide in several regions and rounding to 0.1 made half of
+# those channels unreachable from the UI.
+#
+# The value is validated as it arrived, not filtered first: deleting stray
+# characters turned "1e9" into "19" and then clamped that to a legal-looking
+# frequency, so a malformed request became a silent retune instead of an
+# error.
+_clamp_num() {   # $1=raw $2=lo $3=hi -> stdout: "N.NN" or empty
+    awk -v s="$1" -v lo="$2" -v hi="$3" 'BEGIN {
+        if (s !~ /^[0-9]+(\.[0-9]+)?$/) exit 1
+        n = s + 0
+        if (n < lo) n = lo
+        if (n > hi) n = hi
+        printf "%.2f", n
+    }' 2>/dev/null
+}
+
+_uci_ensure_section() {
+    uci -q get fmtx.@settings[0] >/dev/null 2>&1 || uci add fmtx settings >/dev/null
+}
+
+_fail() {   # $1 = message, $2 = exit code (default 1)
+    json_init
+    json_add_string "result" "$1"
+    json_add_int    "code"   1
+    json_dump
+    exit "${2:-1}"
+}
+
+# ════════════════════════════════════════════════════════════════════════
+
+case "$1" in
+    list)
+        echo '{"get_state":{},"set_ctrl":{"name":"string","value":"string"},"set_rds":{"text":"string","pi":"string","pty":"string","ecc":"string"},"start_radiotext":{"text":"string"},"stop_radiotext":{},"get_radiotext_status":{},"get_info":{}}'
+        exit 0
+        ;;
+
+    call)
+        action="$2"
+        case "$action" in
+
+            # ── get_state ───────────────────────────────────────────────────
+            # No live hardware read-back for register-backed settings — see
+            # the architecture note above. radiotext_running is the one
+            # exception: it reflects a background process, not a register,
+            # and UCI can't tell you if that process crashed, so it's
+            # checked directly rather than trusted from storage.
+            get_state)
+                enabled=$(uci -q get fmtx.@settings[0].enabled)
+                freq=$(   uci -q get fmtx.@settings[0].freq)
+                stereo=$( uci -q get fmtx.@settings[0].stereo)
+                pe=$(     uci -q get fmtx.@settings[0].pre_emphasis)
+                dev=$(    uci -q get fmtx.@settings[0].deviation)
+                rds=$(    uci -q get fmtx.@settings[0].rds_text)
+                pi=$(     uci -q get fmtx.@settings[0].pi)
+                pty=$(    uci -q get fmtx.@settings[0].pty)
+                ecc=$(    uci -q get fmtx.@settings[0].ecc)
+                rt=$(     uci -q get fmtx.@settings[0].radiotext)
+                rt_active=$(uci -q get fmtx.@settings[0].radiotext_active)
+                rt_running=$(_tx_rt_status)
+
+                json_init
+                json_add_string "enabled"      "$enabled"
+                json_add_string "freq"         "$freq"
+                json_add_string "stereo"       "$stereo"
+                json_add_string "pre_emphasis" "$pe"
+                json_add_string "deviation"    "$dev"
+                json_add_string "rds_text"     "$rds"
+                json_add_string "pi"           "$pi"
+                json_add_string "pty"          "$pty"
+                json_add_string "ecc"          "$ecc"
+                json_add_string "radiotext"    "$rt"
+                if [ "$rt_running" = "running" ] && [ "$rt_active" = "1" ]; then
+                    json_add_string "radiotext_running" "1"
+                else
+                    json_add_string "radiotext_running" "0"
+                fi
+                json_add_string "daemon_running" \
+                    "$([ "$rt_running" = "running" ] && echo 1 || echo 0)"
+                json_dump
+                exit 0
+                ;;
+
+            # ── set_ctrl ────────────────────────────────────────────────────
+            # Allowed controls: enabled (0/1), freq (TX_FREQ_MIN-TX_FREQ_MAX),
+            #                   stereo (0/1), pre_emphasis (0/1/2),
+            #                   deviation (TX_DEVIATION_MIN-TX_DEVIATION_MAX kHz)
+            set_ctrl)
+                raw_json=$(cat)
+                ctrl_name=""
+                ctrl_value=""
+                if [ -n "$raw_json" ] && json_load "$raw_json" 2>/dev/null; then
+                    json_get_var ctrl_name  name  2>/dev/null
+                    json_get_var ctrl_value value 2>/dev/null
+                fi
+
+                case "$ctrl_name" in
+                    enabled|freq|stereo|pre_emphasis|deviation) ;;
+                    *) _fail "error: unknown control '$ctrl_name'" ;;
+                esac
+
+                case "$ctrl_name" in
+                    freq)
+                        ctrl_value=$(_clamp_num "$ctrl_value" "$TX_FREQ_MIN" "$TX_FREQ_MAX")
+                        [ -n "$ctrl_value" ] || _fail "error: invalid frequency"
+                        _tx_set_freq "$ctrl_value"
+                        ok=$?
+                        ;;
+                    deviation)
+                        # A kHz float (register 0x0C is a Q8.8 gain), not the
+                        # old raw 0-200 integer shift.
+                        ctrl_value=$(_clamp_num "$ctrl_value" "$TX_DEVIATION_MIN" "$TX_DEVIATION_MAX")
+                        [ -n "$ctrl_value" ] || _fail "error: invalid deviation"
+                        _tx_set_deviation "$ctrl_value"
+                        ok=$?
+                        ;;
+                    pre_emphasis)
+                        ctrl_value=$(printf '%s' "$ctrl_value" | tr -cd '0-9')
+                        [ -n "$ctrl_value" ] || ctrl_value=0
+                        ctrl_value=$(_num_of "$ctrl_value")
+                        [ -n "$ctrl_value" ] || _fail "error: invalid pre-emphasis"
+                        [ "$ctrl_value" -gt 2 ] && ctrl_value=2
+                        _tx_set_preemphasis "$ctrl_value"
+                        ok=$?
+                        ;;
+                    stereo|enabled)
+                        ctrl_value=$(printf '%s' "$ctrl_value" | tr -cd '0-9')
+                        [ -n "$ctrl_value" ] || ctrl_value=0
+                        ctrl_value=$(_num_of "$ctrl_value")
+                        [ -n "$ctrl_value" ] || _fail "error: invalid $ctrl_name"
+                        [ "$ctrl_value" -gt 1 ] && ctrl_value=1
+                        if [ "$ctrl_name" = "stereo" ]; then
+                            _tx_set_stereo "$ctrl_value"
+                        else
+                            _tx_set_enable "$ctrl_value"
+                        fi
+                        ok=$?
+                        ;;
+                esac
+
+                # Persist only what the hardware actually accepted. fmtx
+                # fails for real reasons (no /dev/mem permission, AXI region
+                # absent, bitstream not loaded) — committing regardless would
+                # leave UCI describing a state the device never entered, and
+                # the boot-time restore would then faithfully replay it.
+                if [ "$ok" = "0" ]; then
+                    _uci_ensure_section
+                    uci set "fmtx.@settings[0].${ctrl_name}=${ctrl_value}"
+                    uci commit fmtx
+                    # The stereo/mono announcement lives inside the RDS frame,
+                    # so it has to be rewritten when stereo changes.
+                    [ "$ctrl_name" = "stereo" ] && _tx_refresh_rds_di
+                fi
+
+                json_init
+                json_add_string "result" "$ctrl_name=$ctrl_value"
+                json_add_int    "code"   "$ok"
+                json_dump
+                exit 0
+                ;;
+
+            # ── set_rds ─────────────────────────────────────────────────────
+            # PS + optional PI/PTY/ECC, applied as one frame rebuild. PI/PTY
+            # fit in the static PS frame fmtx writes once and exits; ECC
+            # doesn't — it has nowhere to go once PS fills all 4 hardware
+            # slots, so a non-empty ECC here starts an ECC-only rotation
+            # (empty RadioText) instead of the plain one-shot call.
+            #
+            # Any identity change — ECC or not — stops whatever rotation was
+            # already running first: it's about to be replaced by whatever
+            # THIS call specifies, and a stale RadioText/ECC daemon would
+            # otherwise silently overwrite the new PS/PI/PTY on its next
+            # ~360ms tick. radiotext_active is cleared here even when an
+            # ECC-only rotation follows, since that rotation carries no
+            # RadioText text — see get_radiotext_status, which checks this
+            # flag rather than raw process liveness so the RadioText toggle
+            # doesn't light up for a rotation that isn't actually playing it.
+            set_rds)
+                raw_json=$(cat)
+                text=""; pi_in=""; pty_in=""; ecc_in=""
+                if [ -n "$raw_json" ] && json_load "$raw_json" 2>/dev/null; then
+                    json_get_var text   text 2>/dev/null
+                    json_get_var pi_in  pi   2>/dev/null
+                    json_get_var pty_in pty  2>/dev/null
+                    json_get_var ecc_in ecc  2>/dev/null
+                fi
+
+                # Strip control characters and shell-hazard characters
+                # (quotes, backticks, dollar signs, backslashes); this text
+                # ultimately reaches a command line.
+                text=$(printf '%s' "$text" | tr -d '\047\042\140\044\134\r\n\t')
+                text=$(printf '%s' "$text" | cut -c1-"$TX_RDS_MAX_LEN")
+
+                pi=$(_validate_pi   "$pi_in")
+                pty=$(_validate_pty "$pty_in")
+                ecc=$(_validate_ecc "$ecc_in")
+
+                if [ "$(_tx_rt_status)" = "running" ]; then
+                    _tx_rt_stop
+                    rt_was_stopped=1
+                else
+                    rt_was_stopped=0
+                fi
+
+                if [ -n "$ecc" ]; then
+                    _tx_rt_start "$text" "" "$pi" "$pty" "$ecc"
+                    ok=$?
+                else
+                    _tx_set_rds_identity "$text" "$pi" "$pty"
+                    ok=$?
+                fi
+
+                if [ "$ok" = "0" ]; then
+                    _uci_ensure_section
+                    uci set "fmtx.@settings[0].rds_text=${text}"
+                    uci set "fmtx.@settings[0].pi=${pi}"
+                    uci set "fmtx.@settings[0].pty=${pty}"
+                    uci set "fmtx.@settings[0].ecc=${ecc}"
+                    uci set "fmtx.@settings[0].radiotext_active=0"
+                    uci commit fmtx
+                fi
+
+                json_init
+                json_add_string "result"            "$text"
+                json_add_string "ecc"               "$ecc"
+                json_add_int    "code"              "$ok"
+                json_add_int    "radiotext_stopped" "$rt_was_stopped"
+                json_dump
+                exit 0
+                ;;
+
+            # ── start_radiotext ─────────────────────────────────────────────
+            # Uses the PS/PI/PTY/ECC already saved via set_rds — RadioText
+            # only ever rotates alongside an existing station identity, it
+            # doesn't carry its own. Any ECC that was rotating on its own
+            # (set_rds with a non-empty ecc, no RadioText) joins this same
+            # rotation rather than being dropped by it.
+            start_radiotext)
+                raw_json=$(cat)
+                rt=""
+                if [ -n "$raw_json" ] && json_load "$raw_json" 2>/dev/null; then
+                    json_get_var rt text 2>/dev/null
+                fi
+
+                rt=$(printf '%s' "$rt" | tr -d '\047\042\140\044\134\r\n\t')
+                rt=$(printf '%s' "$rt" | cut -c1-"$TX_RT_MAX_LEN")
+
+                ps=$( uci -q get fmtx.@settings[0].rds_text)
+                pi=$( uci -q get fmtx.@settings[0].pi)
+                pty=$(uci -q get fmtx.@settings[0].pty)
+                ecc=$(uci -q get fmtx.@settings[0].ecc)
+
+                [ -n "$ps" ] || _fail "error: set a station name (PS) first"
+                # Empty text used to start a process that exited immediately
+                # (nothing to rotate) while the UI was told "started".
+                [ -n "$rt" ] || _fail "error: RadioText must not be empty"
+
+                if ! _tx_rt_start "$ps" "$rt" "$pi" "$pty" "$ecc"; then
+                    _fail "error: fmtx failed to start the rotation"
+                fi
+
+                _uci_ensure_section
+                uci set "fmtx.@settings[0].radiotext=${rt}"
+                uci set "fmtx.@settings[0].radiotext_active=1"
+                uci commit fmtx
+
+                json_init
+                json_add_string "result" "started"
+                json_add_int    "code"   0
+                json_dump
+                exit 0
+                ;;
+
+            # ── stop_radiotext ──────────────────────────────────────────────
+            stop_radiotext)
+                _tx_rt_stop
+
+                _uci_ensure_section
+                uci set "fmtx.@settings[0].radiotext_active=0"
+                uci commit fmtx
+
+                json_init
+                json_add_string "result" "stopped"
+                json_add_int    "code"   0
+                json_dump
+                exit 0
+                ;;
+
+            # ── get_radiotext_status ────────────────────────────────────────
+            get_radiotext_status)
+                running=$(_tx_rt_status)
+                rt_active=$(uci -q get fmtx.@settings[0].radiotext_active)
+                # A live rotation only counts as "RadioText running" for the
+                # UI if it's actually carrying RadioText content — an
+                # ECC-only rotation (started via set_rds) leaves the daemon
+                # alive but radiotext_active=0, and the toggle shouldn't
+                # claim RadioText is playing when it isn't. daemon_running
+                # is the unfiltered signal, for callers (the ECC field) that
+                # care whether *anything* is currently rotating.
+                if [ "$running" = "running" ] && [ "$rt_active" = "1" ]; then
+                    is_running=1
+                else
+                    is_running=0
+                fi
+                json_init
+                json_add_string "running"        "$is_running"
+                json_add_string "daemon_running" \
+                    "$([ "$running" = "running" ] && echo 1 || echo 0)"
+                json_dump
+                exit 0
+                ;;
+
+            # ── get_info ────────────────────────────────────────────────────
+            get_info)
+                info_out=$(_tx_get_info 2>&1)
+                json_init
+                json_add_string "info" "$info_out"
+                json_dump
+                exit 0
+                ;;
+
+            *)
+                _fail "error: unknown method '$action'"
+                ;;
+        esac
+        ;;
+esac
+
+exit 1

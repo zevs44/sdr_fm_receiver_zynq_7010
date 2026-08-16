@@ -1,0 +1,142 @@
+#!/bin/sh /etc/rc.common
+START=99
+# STOP was missing, so rc.common never created a K-link: stop() was only ever
+# reachable by hand, and a reboot left the carrier radiating unattended.
+STOP=10
+
+# Absolute path on purpose: /usr/bin/fmtx, /etc/init.d/fmtx and
+# /usr/libexec/rpcd/fmtx all share the same name now, so nothing here should
+# depend on PATH resolution order.
+FMTX_BIN=/usr/bin/fmtx
+
+# PID file for the RDS rotation daemon (-R / -C). Same path the rpcd backend
+# uses, so a daemon started here is visible to and controllable by
+# start_radiotext/stop_radiotext/get_radiotext_status over ubus afterwards.
+RT_PID_FILE=/tmp/fmtx_rt.pid
+
+# Confirms the pid still belongs to fmtx and not to whatever recycled that
+# number after a crash or a reboot — same check the rpcd backend makes.
+rt_alive() {
+    [ -n "$1" ] || return 1
+    kill -0 "$1" 2>/dev/null || return 1
+    [ "$(cat "/proc/$1/comm" 2>/dev/null)" = "fmtx" ]
+}
+
+# Restores the transmitter to its last saved state on boot.
+#
+# Calls fmtx directly rather than going through `ubus call fmtx ...`:
+#   - no dependency on rpcd being up and having registered the object
+#   - one mmap of /dev/mem instead of one per setting
+#   - no redundant UCI commits (the rpcd path re-writes each value it is
+#     handed, which here would just be re-writing what was read a line ago)
+#
+# Everything except the rotation daemon is passed in a single invocation on
+# purpose. fmtx reads CTRL once at startup, applies every flag given, and
+# writes CTRL back once as its final act — so -f/-d/-t/-P/-y land in their own
+# registers first and the enable bit goes in last, without needing to sequence
+# the calls by hand. -R/-C can't join that call: they run as a foreground
+# daemon, so they are started separately, after the one-shot state is already
+# fully applied.
+#
+# Values in UCI were already validated and clamped when they were written,
+# so they are replayed as-is.
+
+start() {
+    ENABLED=$(uci -q get fmtx.@settings[0].enabled)
+    FREQ=$(   uci -q get fmtx.@settings[0].freq)
+    STEREO=$( uci -q get fmtx.@settings[0].stereo)
+    PE=$(     uci -q get fmtx.@settings[0].pre_emphasis)
+    DEV=$(    uci -q get fmtx.@settings[0].deviation)
+    RDS=$(    uci -q get fmtx.@settings[0].rds_text)
+    PI=$(     uci -q get fmtx.@settings[0].pi)
+    PTY=$(    uci -q get fmtx.@settings[0].pty)
+    ECC=$(    uci -q get fmtx.@settings[0].ecc)
+    RT=$(     uci -q get fmtx.@settings[0].radiotext)
+    RT_ACTIVE=$(uci -q get fmtx.@settings[0].radiotext_active)
+
+    # Nothing saved yet (fresh install) — leave the transmitter untouched.
+    [ -z "$ENABLED" ] && return 0
+
+    # Build the argument list positionally so RDS text containing spaces
+    # survives intact (word splitting would otherwise tear it apart).
+    # ECC is deliberately left out of this call: fmtx has nowhere to put it
+    # in a static frame once PS fills all 4 hardware slots, so -C always
+    # needs the rotation daemon below, never this one-shot call.
+    set --
+    [ -n "$FREQ"   ] && set -- "$@" -f "$FREQ"
+    [ -n "$STEREO" ] && set -- "$@" -s "$STEREO"
+    [ -n "$PE"     ] && set -- "$@" -p "$PE"
+    [ -n "$DEV"    ] && set -- "$@" -d "$DEV"
+    if [ -n "$RDS" ]; then
+        set -- "$@" -t "$RDS"
+        # -P/-y only take effect together with -t — matches fmtx's own
+        # requirement, since the whole frame is rebuilt in one call.
+        [ -n "$PI"  ] && set -- "$@" -P "$PI"
+        [ -n "$PTY" ] && set -- "$@" -y "$PTY"
+    fi
+    set -- "$@" -e "$ENABLED"
+
+    if $FMTX_BIN "$@" >/dev/null 2>&1; then
+        logger -t fmtx "restored transmitter state (enabled=$ENABLED freq=${FREQ:-unset})"
+    else
+        logger -t fmtx "ERROR: fmtx failed while restoring saved state"
+        return 1
+    fi
+
+    # RadioText and/or ECC were rotating before the last shutdown/reboot —
+    # bring them back up now that the station identity above is already in
+    # place. ECC behaves like PI/PTY here (restored whenever it's set,
+    # independent of RadioText's own on/off state) rather than like
+    # radiotext_active, since it's a station property that happens to
+    # require the rotation daemon, not a toggle of its own. Requires a
+    # station name; without one there's nothing for -R/-C to rotate
+    # alongside (matches start_radiotext's own guard in the rpcd backend).
+    #
+    # An empty $RT is never passed as -R: fmtx rejects an empty RadioText
+    # (it would rotate a frame containing nothing but a carriage return),
+    # and that rejection would take a legitimate ECC-only rotation down
+    # with it.
+    RT_WANTED=0
+    [ "$RT_ACTIVE" = "1" ] && [ -n "$RT" ] && RT_WANTED=1
+    if { [ "$RT_WANTED" = "1" ] || [ -n "$ECC" ]; } && [ -n "$RDS" ]; then
+        set --
+        set -- -t "$RDS"
+        [ "$RT_WANTED" = "1" ] && set -- "$@" -R "$RT"
+        [ -n "$PI"  ] && set -- "$@" -P "$PI"
+        [ -n "$PTY" ] && set -- "$@" -y "$PTY"
+        [ -n "$ECC" ] && set -- "$@" -C "$ECC"
+        ( exec $FMTX_BIN "$@" >/dev/null 2>&1 ) &
+        rt_pid=$!
+        echo "$rt_pid" > "$RT_PID_FILE"
+        # fmtx fails within milliseconds when it fails at all, so confirm the
+        # daemon is actually up instead of logging success unconditionally.
+        sleep 1
+        if rt_alive "$rt_pid"; then
+            logger -t fmtx "restored RDS rotation (RadioText=$([ "$RT_WANTED" = "1" ] && echo yes || echo no), ECC=${ECC:-none})"
+        else
+            rm -f "$RT_PID_FILE"
+            logger -t fmtx "ERROR: RDS rotation daemon failed to start"
+        fi
+    fi
+}
+
+stop() {
+    # Stop the rotation daemon first so fmtx's own signal handler writes back
+    # a clean PS frame before anything else touches the registers.
+    if [ -f "$RT_PID_FILE" ]; then
+        pid=$(tr -cd '0-9' < "$RT_PID_FILE" 2>/dev/null)
+        rm -f "$RT_PID_FILE"
+        if rt_alive "$pid"; then
+            kill -TERM "$pid" 2>/dev/null
+            i=0
+            while [ "$i" -lt 20 ] && rt_alive "$pid"; do
+                sleep 0.1; i=$((i + 1))
+            done
+            rt_alive "$pid" && kill -KILL "$pid" 2>/dev/null
+        fi
+    fi
+
+    # Leave the carrier off rather than transmitting unattended through a
+    # shutdown or a service stop.
+    $FMTX_BIN -e 0 >/dev/null 2>&1
+}

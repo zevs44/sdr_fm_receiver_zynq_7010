@@ -1,0 +1,48 @@
+From: OpenWrt packaging fix
+Subject: csdr.c: fix heap buffer overflow in convert_f_s24/convert_s24_f
+
+Both command handlers allocated s24buffer using the_bufsize *before*
+calling initialize_buffers() - but the_bufsize is a global that
+starts at 0 (`int the_bufsize = 0;`) and is only ever set inside
+initialize_buffers() itself. So s24buffer was allocated as a 0-byte
+buffer, then every read/write into it (the_bufsize*3 bytes once
+the_bufsize gets its real value) overflowed the heap.
+
+convert_s24_f's overflow goes through fread(), which glibc's
+_FORTIFY_SOURCE instruments and catches at runtime:
+  *** buffer overflow detected ***: terminated
+(reproduced with a plain -O2 build on this distro's default gcc,
+which enables _FORTIFY_SOURCE by default).
+
+convert_f_s24's overflow writes through a hand-written byte-by-byte
+loop (output[k++]=...), which FORTIFY does not instrument, so it
+silently corrupts adjacent heap memory instead of crashing - this
+was intermittently corrupting unrelated pipeline data (confirmed via
+a round-trip test: convert_f_s24 | convert_s24_f no longer reproduced
+the original float stream until this ordering was fixed).
+
+Fix: call initialize_buffers() first (which sets the real
+the_bufsize), then allocate s24buffer.
+
+--- a/csdr.c
++++ b/csdr.c
+@@ -606,8 +606,8 @@ int main(int argc, char *argv[])
+     if(!strcmp(argv[1],"convert_f_s24"))
+     {
+         int bigendian = (argc>2) && (!strcmp(argv[2],"--bigendian"));
+-        unsigned char* s24buffer = (unsigned char*)malloc(sizeof(unsigned char)*the_bufsize*3);
+         if(!sendbufsize(initialize_buffers())) return -2;
++        unsigned char* s24buffer = (unsigned char*)malloc(sizeof(unsigned char)*the_bufsize*3);
+         for(;;)
+         {
+             FEOF_CHECK;
+@@ -620,8 +620,8 @@ int main(int argc, char *argv[])
+     if(!strcmp(argv[1],"convert_s24_f"))
+     {
+         int bigendian = (argc>2) && (!strcmp(argv[2],"--bigendian"));
+-        unsigned char* s24buffer = (unsigned char*)malloc(sizeof(unsigned char)*the_bufsize*3);
+         if(!sendbufsize(initialize_buffers())) return -2;
++        unsigned char* s24buffer = (unsigned char*)malloc(sizeof(unsigned char)*the_bufsize*3);
+         for(;;)
+         {
+             FEOF_CHECK;

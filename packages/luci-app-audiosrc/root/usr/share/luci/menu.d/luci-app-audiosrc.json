@@ -1,0 +1,13 @@
+{
+	"admin/services/audiosrc": {
+		"title": "Audio Source",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "audiosrc"
+		},
+		"depends": {
+			"acl": [ "luci-app-audiosrc" ]
+		}
+	}
+}

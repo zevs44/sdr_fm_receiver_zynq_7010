@@ -1,0 +1,16 @@
+{
+	"luci-app-fmtx": {
+		"description": "Grant access to FM transmitter control",
+		"read": {
+			"ubus": {
+				"fmtx": [ "get_state", "get_info", "get_radiotext_status" ]
+			},
+			"uci": [ "fmtx" ]
+		},
+		"write": {
+			"ubus": {
+				"fmtx": [ "set_ctrl", "set_rds", "start_radiotext", "stop_radiotext" ]
+			}
+		}
+	}
+}

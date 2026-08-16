@@ -1,0 +1,63 @@
+#!/bin/sh /etc/rc.common
+START=99
+# STOP was missing, so rc.common never created a K-link and stop() was
+# unreachable at shutdown. It matters now that this script owns a daemon.
+STOP=10
+
+USE_PROCD=1
+
+RDS_DAEMON=/usr/libexec/fmradio-rdsd
+RDS_STATE_FILE=/tmp/fmradio_rds.state
+RDS_FLUSH_MARK=/tmp/fmradio_rds.flush
+
+# Shared with the rpcd backend — see its header for the control list. Sourced
+# defensively so an interrupted upgrade cannot leave the boot sequence dead on
+# a missing file.
+[ -r /usr/share/fmradio/v4l2.sh ] && . /usr/share/fmradio/v4l2.sh
+
+# Restores saved audio/tuner settings, then hands the continuous RDS reader to
+# procd. The reader is supervised rather than launched and forgotten: it holds
+# rds-ctl open for as long as the service runs, so if it ever dies procd brings
+# it back instead of leaving the web UI's RDS panel silently frozen.
+start_service() {
+    i=0
+    while [ ! -e /dev/radio0 ] && [ $i -lt 10 ]; do
+        sleep 1
+        i=$((i + 1))
+    done
+
+    [ ! -e /dev/radio0 ] && return 1
+
+    # The guard on the source above means a missing file degrades to "no
+    # settings restored" rather than to an init script that dies before it ever
+    # starts the RDS reader. Say so instead of failing silently.
+    if ! command -v fm_apply_uci >/dev/null 2>&1; then
+        logger -t fmradio "/usr/share/fmradio/v4l2.sh missing - saved settings not restored"
+    fi
+
+    # Everything about which controls exist, what their values mean and in
+    # what order to write them lives in the shared file, so this script and the
+    # rpcd backend cannot drift apart.
+    fm_apply_uci >/dev/null 2>&1
+
+    # Whatever was cached belongs to whichever station was tuned before the
+    # reboot, so start from empty rather than showing a stale identity.
+    rm -f "$RDS_STATE_FILE" "$RDS_FLUSH_MARK"
+
+    procd_open_instance rdsd
+    procd_set_param command "$RDS_DAEMON"
+    procd_set_param respawn 3600 5 0
+    procd_set_param stdout 0
+    procd_set_param stderr 1
+    procd_close_instance
+}
+
+stop_service() {
+    rm -f "$RDS_STATE_FILE" "$RDS_FLUSH_MARK"
+}
+
+# The daemon reads rds_reception and rds_cycle from UCI, so a config change
+# should reach it — reload_config makes `/etc/init.d/fmradio reload` restart it.
+service_triggers() {
+    procd_add_reload_trigger "fmradio"
+}

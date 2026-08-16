@@ -1,0 +1,12 @@
+{
+	"admin/services/mympd": {
+		"title": "myMPD",
+		"action": {
+			"type": "view",
+			"path": "mympd/mympd"
+		},
+		"depends": {
+			"acl": [ "luci-app-mympd" ]
+		}
+	}
+}

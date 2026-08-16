@@ -1,0 +1,52 @@
+{
+	"luci-app-mympd": {
+		"description": "Grant access to myMPD and MPD management",
+		"read": {
+			"file": {
+				"/etc/mpd.conf":              [ "read" ],
+				"/var/lib/mympd":             [ "read" ],
+				"/var/lib/mympd/*":           [ "read" ],
+				"/etc/mympd":                 [ "read" ],
+				"/etc/mympd/*":               [ "read" ],
+				"/etc/mpd_autoplay":          [ "read" ],
+				"/tmp/mpd-backup.tar.gz":     [ "read" ],
+				"/tmp/mympd-backup.tar.gz":   [ "read" ],
+				"/proc/stat":                 [ "read" ],
+				"/proc/*/stat":               [ "read" ],
+				"/proc/*/status":             [ "read" ]
+			},
+			"ubus": {
+				"file":    [ "read", "stat" ],
+				"service": [ "list" ]
+			},
+			"cgi-io": [ "download" ]
+		},
+		"write": {
+			"cgi-io": [ "upload" ],
+			"file": {
+				"/etc/init.d/mympd":                [ "exec" ],
+				"/etc/init.d/mpd":                  [ "exec" ],
+				"/usr/bin/mpc":                     [ "exec" ],
+				"/usr/bin/aplay":                   [ "exec" ],
+				"/usr/bin/amixer":                  [ "exec" ],
+				"/bin/tar":                         [ "exec" ],
+				"/bin/mkdir":                       [ "exec" ],
+				"/bin/touch":                       [ "exec" ],
+				"/sbin/uci":                        [ "exec" ],
+				"/etc/mpd.conf":                    [ "write" ],
+				"/var/lib/mympd/config/http_port":  [ "write" ],
+				"/var/lib/mympd/config/http_host":  [ "write" ],
+				"/etc/mympd/config/http_port":      [ "write" ],
+				"/etc/mympd/config/http_host":      [ "write" ],
+				"/etc/mpd_autoplay":                [ "write" ],
+				"/tmp/mympd-upload.tar.gz":         [ "write", "remove" ],
+				"/tmp/mpd-upload.tar.gz":           [ "write", "remove" ],
+				"/tmp/mpd-backup.tar.gz":           [ "write", "remove" ],
+				"/tmp/mympd-backup.tar.gz":         [ "write", "remove" ]
+			},
+			"ubus": {
+				"file": [ "write", "remove", "exec" ]
+			}
+		}
+	}
+}

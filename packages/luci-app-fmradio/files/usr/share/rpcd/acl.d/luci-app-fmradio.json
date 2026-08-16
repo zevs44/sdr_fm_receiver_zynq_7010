@@ -1,0 +1,17 @@
+{
+    "luci-app-fmradio": {
+        "description": "Grant access to FM radio control",
+        "read": {
+            "ubus": {
+                "fmradio": [ "get_info", "get_freq", "scan_status", "get_ctrl", "get_rds" ]
+            },
+            "uci": [ "fmradio" ]
+        },
+        "write": {
+            "ubus": {
+                "fmradio": [ "set_freq", "seek", "scan", "set_ctrl", "apply_settings" ]
+            },
+            "uci": [ "fmradio" ]
+        }
+    }
+}

@@ -1,0 +1,309 @@
+#!/bin/sh
+# ============================================================================
+#  fmradio-rdsd — continuous RDS reader for luci-app-fmradio
+#
+#  WHY THIS EXISTS
+#  The rpcd backend used to answer get_rds by running
+#      timeout -s INT 10 rds-ctl -d /dev/radio0 -R --verbose
+#  on every call. That blocked the backend for ten seconds per request, so the
+#  UI's one-second poll actually refreshed once every ~10 s, and every request
+#  started a brand new rds-ctl that had to re-acquire block sync from scratch,
+#  throwing away the PS/RadioText it had just assembled.
+#
+#  This daemon holds rds-ctl open instead and keeps a cache in
+#  /tmp/fmradio_rds.state, which get_rds then reads instantly. The UI's poll
+#  becomes the only latency left, so RDS appears as fast as the RDS stream
+#  itself delivers it (~11.4 groups/s: a full PS lands in ~1-4 s of decent
+#  reception, RadioText a few seconds later).
+#
+#  WHY THE PARSER IS SHELL AND NOT AWK
+#  It was awk first. mawk — the awk OpenWrt usually resolves to — buffers its
+#  *input*, so with rds-ctl held open nothing reached the parser until the pipe
+#  closed; measured directly, a line printed at t=0 s only surfaced when the
+#  child exited at t=6 s. A `while read` loop delivers each line as it arrives.
+#  At RDS's handful of lines per second the cost of doing this in shell is
+#  irrelevant, and it removes any dependence on which awk is installed.
+#
+#  BUFFERING ON THE OTHER SIDE
+#  rds-ctl still has to be persuaded not to block-buffer its own stdout when it
+#  is piped, which is what stdbuf is for below. stdbuf is optional: without it
+#  the cycle described next is the fallback.
+#
+#  THE CYCLE (and why it is not just one endless rds-ctl)
+#  rds-ctl prints its block/group statistics only in the summary it emits on
+#  the way out. So the child is bounded by `timeout -s INT $CYCLE`: SIGINTed
+#  every CYCLE seconds, it prints the summary and is restarted immediately. The
+#  field cache is NOT cleared across restarts (the parser re-seeds itself from
+#  the state file), so nothing blinks in the UI.
+#
+#  That cycle doubles as the safety net for buffering: if stdbuf is missing and
+#  rds-ctl block-buffers, nothing is parsed until the child exits — in which
+#  case behaviour degrades to exactly what it was before this daemon existed,
+#  once per CYCLE, rather than to nothing at all. CYCLE therefore defaults to
+#  the 10 s the old code used.
+#
+#  FLUSH ON RETUNE
+#  Cached PS/PI/RadioText belong to the station that was tuned when they
+#  arrived. The rpcd backend touches /tmp/fmradio_rds.flush on set_freq / seek
+#  / scan; the parser notices the marker, drops every field and republishes, so
+#  the panel cannot keep showing the previous station's identity.
+#
+#  Usage: fmradio-rdsd            run forever (procd service)
+#         fmradio-rdsd --once     run a single cycle and exit (fallback path
+#                                 used by get_rds when the daemon is not up)
+# ============================================================================
+
+# FMRADIO_DEV exists only so the daemon can be exercised against a stand-in
+# device off the target; unset in normal operation.
+RADIO_DEV="${FMRADIO_DEV:-/dev/radio0}"
+STATE=/tmp/fmradio_rds.state
+STATE_TMP=/tmp/fmradio_rds.state.tmp
+FLUSH_MARK=/tmp/fmradio_rds.flush
+PID_FILE=/tmp/fmradio_rdsd.pid
+CHILD_PID_FILE=/tmp/fmradio_rdsd.child
+
+# Seconds per rds-ctl run. See "THE CYCLE" above. 0 = never restart the child
+# (pure streaming, no statistics — only sensible once streaming is confirmed
+# on this build of rds-ctl).
+DEFAULT_CYCLE=10
+
+# Back-off after a run that ends instantly, so a missing device or a missing
+# rds-ctl cannot turn into a fork bomb.
+RETRY_SLEEP=3
+
+ONCE=0
+[ "$1" = "--once" ] && ONCE=1
+
+CR=$(printf '\r')
+TAB=$(printf '\t')
+
+_uci_get() {
+    local val
+    val=$(uci -q get "fmradio.@settings[0].$1")
+    [ -z "$val" ] && val=$(uci -q get "fmradio.main.$1")
+    printf '%s' "$val"
+}
+
+cycle_seconds() {
+    local v
+    v=$(_uci_get rds_cycle | tr -cd '0-9')
+    [ -n "$v" ] || v="$DEFAULT_CYCLE"
+    printf '%s' "$v"
+}
+
+rds_is_enabled() {
+    local v
+    v=$(_uci_get rds_reception | tr -cd '0-9')
+    # Unset (fresh install, key never written) counts as enabled, matching how
+    # the init script and the UI treat every other saved control.
+    [ -z "$v" ] && return 0
+    [ "$v" = "0" ] && return 1
+    return 0
+}
+
+# stdbuf only matters if rds-ctl block-buffers when piped; it is not a hard
+# dependency, and its absence just means the cycle is doing the work.
+STDBUF=""
+command -v stdbuf >/dev/null 2>&1 && STDBUF="stdbuf -oL -eL"
+
+# ── The parser ──────────────────────────────────────────────────────────────
+# Keeps one value per field, rewrites the state file only when something
+# actually changed, and publishes atomically (write .tmp, then mv) so a reader
+# can never catch a half-written file. `seq` lets the UI tell "the same data
+# again" from "genuinely fresh data" without needing a clock down here.
+#
+# Trimming and field assignment are done with parameter expansion rather than
+# sed/cut so that a busy RDS stream doesn't fork a process per line.
+
+_trim() {   # result in $_t
+    _t="$1"
+    while :; do
+        case "$_t" in
+            " "*|"$TAB"*|"$CR"*) _t="${_t#?}" ;;
+            *) break ;;
+        esac
+    done
+    while :; do
+        case "$_t" in
+            *" "|*"$TAB"|*"$CR") _t="${_t%?}" ;;
+            *) break ;;
+        esac
+    done
+}
+
+# Field names come from this script's own case arms, never from input.
+_put() {   # $1 = field, $2 = value
+    local cur
+    eval "cur=\$f_$1"
+    [ "$cur" = "$2" ] && return 0
+    eval "f_$1=\$2"
+    dirty=1
+}
+
+_state_write() {
+    seq=$((seq + 1))
+    {
+        printf 'seq=%s\n'            "$seq"
+        printf 'pi=%s\n'             "$f_pi"
+        printf 'ps=%s\n'             "$f_ps"
+        printf 'pty=%s\n'            "$f_pty"
+        printf 'area=%s\n'           "$f_area"
+        printf 'ms=%s\n'             "$f_ms"
+        printf 'ecc=%s\n'            "$f_ecc"
+        printf 'di=%s\n'             "$f_di"
+        printf 'tpta=%s\n'           "$f_tpta"
+        printf 'rt=%s\n'             "$f_rt"
+        printf 'stat_blocks=%s\n'    "$f_stat_blocks"
+        printf 'stat_errors=%s\n'    "$f_stat_errors"
+        printf 'stat_corrected=%s\n' "$f_stat_corrected"
+    } > "$STATE_TMP" 2>/dev/null && mv -f "$STATE_TMP" "$STATE" 2>/dev/null
+    dirty=0
+}
+
+_state_clear() {
+    f_pi=""; f_ps=""; f_pty=""; f_area=""; f_ms=""; f_ecc=""; f_di=""
+    f_tpta=""; f_rt=""; f_stat_blocks=""; f_stat_errors=""; f_stat_corrected=""
+}
+
+# Re-seed from whatever the previous run published, so restarting the child
+# does not blank the panel for a few seconds.
+_state_load() {
+    local key val
+    seq=0
+    _state_clear
+    [ -f "$STATE" ] || return 0
+    while IFS='=' read -r key val; do
+        case "$key" in
+            seq)            seq="$val" ;;
+            pi)             f_pi="$val" ;;
+            ps)             f_ps="$val" ;;
+            pty)            f_pty="$val" ;;
+            area)           f_area="$val" ;;
+            ms)             f_ms="$val" ;;
+            ecc)            f_ecc="$val" ;;
+            di)             f_di="$val" ;;
+            tpta)           f_tpta="$val" ;;
+            rt)             f_rt="$val" ;;
+            stat_blocks)    f_stat_blocks="$val" ;;
+            stat_errors)    f_stat_errors="$val" ;;
+            stat_corrected) f_stat_corrected="$val" ;;
+        esac
+    done < "$STATE"
+    case "$seq" in
+        ''|*[!0-9]*) seq=0 ;;
+    esac
+}
+
+_parse_line() {   # $1 = one line of rds-ctl output
+    local line="$1"
+    dirty=0
+
+    case "$line" in
+        PI:*)             _trim "${line#PI:}";             _put pi   "$_t" ;;
+        PS:*)             _trim "${line#PS:}";             _put ps   "$_t" ;;
+        PTY:*)            _trim "${line#PTY:}";            _put pty  "$_t" ;;
+        "Area Coverage:"*) _trim "${line#Area Coverage:}"; _put area "$_t" ;;
+        "MS Flag:"*)      _trim "${line#MS Flag:}";        _put ms   "$_t" ;;
+        ECC:*)            _trim "${line#ECC:}";            _put ecc  "$_t" ;;
+        DI:*)             _trim "${line#DI:}";             _put di   "$_t" ;;
+        # TP and TA share one line ("TP: no  TA: no"), kept whole as before.
+        TP:*)             _trim "$line";                   _put tpta "$_t" ;;
+        # RadioText was never surfaced by the old 10 s path. Three spellings
+        # are accepted because it is version-dependent; if this build of
+        # rds-ctl prints none of them the field stays empty and the UI hides
+        # its row rather than showing a permanent dash.
+        RT:*)             _trim "${line#RT:}";             _put rt   "$_t" ;;
+        "Radio Text:"*)   _trim "${line#Radio Text:}";     _put rt   "$_t" ;;
+        RadioText:*)      _trim "${line#RadioText:}";      _put rt   "$_t" ;;
+        "received blocks / received groups:"*)
+            _trim "${line#received blocks / received groups:}"; _put stat_blocks    "$_t" ;;
+        "block errors / group errors:"*)
+            _trim "${line#block errors / group errors:}";       _put stat_errors    "$_t" ;;
+        "corrected blocks:"*)
+            _trim "${line#corrected blocks:}";                  _put stat_corrected "$_t" ;;
+    esac
+
+    [ "$dirty" = "1" ] && _state_write
+    return 0
+}
+
+run_parser() {
+    local line
+    _state_load
+    while IFS= read -r line; do
+        # Checking the marker per line is a stat() on a tmpfs path — cheaper
+        # than any of the string handling around it.
+        if [ -f "$FLUSH_MARK" ]; then
+            rm -f "$FLUSH_MARK"
+            _state_clear
+            _state_write
+        fi
+        _parse_line "$line"
+    done
+    # rds-ctl's summary may arrive without a trailing newline.
+    [ -n "$line" ] && _parse_line "$line"
+    return 0
+}
+
+run_cycle() {
+    local cyc
+    cyc=$(cycle_seconds)
+    (
+        if [ "$cyc" -gt 0 ] 2>/dev/null; then
+            timeout -s INT "$cyc" $STDBUF rds-ctl -d "$RADIO_DEV" -R --verbose 2>&1 &
+        else
+            $STDBUF rds-ctl -d "$RADIO_DEV" -R --verbose 2>&1 &
+        fi
+        # Recorded so the TERM handler can take the reader down immediately
+        # instead of waiting out the rest of the cycle. timeout forwards the
+        # signal to rds-ctl itself.
+        echo $! > "$CHILD_PID_FILE"
+        wait
+    ) | run_parser
+    rm -f "$CHILD_PID_FILE"
+}
+
+kill_child() {
+    local cpid
+    [ -f "$CHILD_PID_FILE" ] || return 0
+    cpid=$(tr -cd '0-9' < "$CHILD_PID_FILE" 2>/dev/null)
+    [ -n "$cpid" ] && kill -TERM "$cpid" 2>/dev/null
+    rm -f "$CHILD_PID_FILE"
+}
+
+cleanup() {
+    # Without this the tuner would stay open until the current cycle expired:
+    # a foreground child defers the trap, so the cycle is run in the
+    # background and waited on instead.
+    kill_child
+    rm -f "$PID_FILE" "$STATE_TMP"
+    exit 0
+}
+
+if [ "$ONCE" = "1" ]; then
+    [ -e "$RADIO_DEV" ] || exit 1
+    run_cycle
+    exit 0
+fi
+
+echo $$ > "$PID_FILE"
+trap cleanup TERM INT
+
+while :; do
+    if [ ! -e "$RADIO_DEV" ] || ! rds_is_enabled; then
+        # Nothing to read, or the user turned RDS off — don't hold the tuner
+        # open in that case, just check back shortly.
+        sleep "$RETRY_SLEEP"
+        continue
+    fi
+
+    start=$(date +%s)
+    run_cycle &
+    cycle_pid=$!
+    wait "$cycle_pid"
+    end=$(date +%s)
+
+    # A run that ends immediately means something is wrong (device busy,
+    # rds-ctl missing, permissions) rather than the cycle timer firing.
+    [ $((end - start)) -lt 1 ] && sleep "$RETRY_SLEEP"
+done

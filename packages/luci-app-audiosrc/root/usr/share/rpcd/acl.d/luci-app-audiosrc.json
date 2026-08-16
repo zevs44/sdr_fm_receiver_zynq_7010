@@ -1,0 +1,17 @@
+{
+	"luci-app-audiosrc": {
+		"description": "Access to the I2S audio source switch (Radio / myMPD / Bluetooth)",
+		"read": {
+			"uci": [ "audiosrc" ],
+			"ubus": {
+				"luci.audiosrc": [ "get" ]
+			}
+		},
+		"write": {
+			"uci": [ "audiosrc" ],
+			"ubus": {
+				"luci.audiosrc": [ "set" ]
+			}
+		}
+	}
+}

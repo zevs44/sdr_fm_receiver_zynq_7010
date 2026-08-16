@@ -1,0 +1,13 @@
+{
+    "admin/services/fmradio": {
+        "title": "FM Radio",
+        "order": 50,
+        "action": {
+            "type": "view",
+            "path": "fmradio/main"
+        },
+        "depends": {
+            "acl": [ "luci-app-fmradio" ]
+        }
+    }
+}

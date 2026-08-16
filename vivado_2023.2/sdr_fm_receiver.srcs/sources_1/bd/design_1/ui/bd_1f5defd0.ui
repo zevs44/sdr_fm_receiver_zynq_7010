@@ -1,0 +1,82 @@
+{
+   "ActiveEmotionalView":"Default View",
+   "Default View_ScaleFactor":"0.674651",
+   "Default View_TopLeft":"-167,436",
+   "ExpandedHierarchyInLayout":"",
+   "guistr":"# # String gsaved with Nlview 7.5.8 2022-09-21 7111 VDI=41 GEI=38 GUI=JA:10.0
+#  -string -flagsOSRD
+preplace port DDR -pg 1 -lvl 6 -x 1900 -y 70 -defaultsOSRD
+preplace port FIXED_IO -pg 1 -lvl 6 -x 1900 -y 90 -defaultsOSRD
+preplace port port-id_lvds_p_0 -pg 1 -lvl 0 -x -10 -y 1210 -defaultsOSRD
+preplace port port-id_lvds_n_0 -pg 1 -lvl 0 -x -10 -y 1230 -defaultsOSRD
+preplace port port-id_antenna_out_0 -pg 1 -lvl 6 -x 1900 -y 900 -defaultsOSRD
+preplace port port-id_led_audio_heartbeat_0 -pg 1 -lvl 6 -x 1900 -y 1250 -defaultsOSRD
+preplace port port-id_led_rds_sync_0 -pg 1 -lvl 6 -x 1900 -y 1230 -defaultsOSRD
+preplace port port-id_led_station_found_0 -pg 1 -lvl 6 -x 1900 -y 1210 -defaultsOSRD
+preplace port port-id_led_stereo_lock_0 -pg 1 -lvl 6 -x 1900 -y 1190 -defaultsOSRD
+preplace port port-id_audio_out_l_0 -pg 1 -lvl 6 -x 1900 -y 1090 -defaultsOSRD
+preplace port port-id_audio_out_r_0 -pg 1 -lvl 6 -x 1900 -y 1110 -defaultsOSRD
+preplace port port-id_ch2_i2s_bclk_0 -pg 1 -lvl 0 -x -10 -y 610 -defaultsOSRD
+preplace port port-id_ch2_i2s_lrclk_0 -pg 1 -lvl 0 -x -10 -y 630 -defaultsOSRD
+preplace port port-id_ch2_i2s_sdata_0 -pg 1 -lvl 0 -x -10 -y 650 -defaultsOSRD
+preplace portBus dac_out_0 -pg 1 -lvl 6 -x 1900 -y 530 -defaultsOSRD
+preplace inst processing_system7_0 -pg 1 -lvl 4 -x 1310 -y 130 -defaultsOSRD
+preplace inst proc_sys_reset_0 -pg 1 -lvl 1 -x 200 -y 1110 -defaultsOSRD
+preplace inst clk_wiz_0 -pg 1 -lvl 1 -x 200 -y 870 -defaultsOSRD
+preplace inst i2s_to_delta_sigma_d_0 -pg 1 -lvl 4 -x 1310 -y 530 -defaultsOSRD
+preplace inst axi_i2s_adi_0 -pg 1 -lvl 3 -x 870 -y 180 -defaultsOSRD
+preplace inst fm_transmitter_axi_0 -pg 1 -lvl 4 -x 1310 -y 900 -defaultsOSRD
+preplace inst axi_sdr_fm_0 -pg 1 -lvl 4 -x 1310 -y 1170 -defaultsOSRD
+preplace inst i2s_axi_mux_top_0 -pg 1 -lvl 3 -x 870 -y 560 -defaultsOSRD
+preplace inst ps7_0_axi_periph -pg 1 -lvl 5 -x 1700 -y 720 -defaultsOSRD
+preplace netloc axi_i2s_adi_0_bclk_o 1 2 2 680 360 1050
+preplace netloc axi_i2s_adi_0_lrclk_o 1 2 2 720 370 1040
+preplace netloc axi_i2s_adi_0_sdata_o 1 2 2 710 760 1020
+preplace netloc axi_sdr_fm_0_audio_out_l 1 4 2 NJ 1090 N
+preplace netloc axi_sdr_fm_0_audio_out_r 1 4 2 NJ 1110 N
+preplace netloc axi_sdr_fm_0_i2s_bclk 1 2 3 690 1030 NJ 1030 1520
+preplace netloc axi_sdr_fm_0_i2s_lrclk 1 2 3 700 1310 NJ 1310 1530
+preplace netloc axi_sdr_fm_0_i2s_sdata 1 2 3 670 1320 NJ 1320 1510
+preplace netloc axi_sdr_fm_0_led_audio_heartbeat 1 4 2 NJ 1250 N
+preplace netloc axi_sdr_fm_0_led_rds_sync 1 4 2 NJ 1230 N
+preplace netloc axi_sdr_fm_0_led_station_found 1 4 2 NJ 1210 N
+preplace netloc axi_sdr_fm_0_led_stereo_lock 1 4 2 NJ 1190 N
+preplace netloc ch2_i2s_bclk_0_1 1 0 3 NJ 610 NJ 610 NJ
+preplace netloc ch2_i2s_lrclk_0_1 1 0 3 NJ 630 NJ 630 NJ
+preplace netloc ch2_i2s_sdata_0_1 1 0 3 NJ 650 NJ 650 NJ
+preplace netloc clk_wiz_0_clk_out1 1 1 3 NJ 850 NJ 850 1010
+preplace netloc clk_wiz_0_clk_out3 1 1 3 NJ 890 650 890 NJ
+preplace netloc fm_transmitter_axi_0_antenna_out 1 4 2 NJ 900 N
+preplace netloc i2s_axi_mux_top_0_adi_sdata_out 1 2 2 730 20 1010
+preplace netloc i2s_axi_mux_top_0_i2s_bclk_out 1 3 1 N 530
+preplace netloc i2s_axi_mux_top_0_i2s_lrclk_out 1 3 1 N 550
+preplace netloc i2s_axi_mux_top_0_i2s_sdata_out 1 3 1 N 570
+preplace netloc i2s_to_delta_sigma_d_0_dac_out 1 4 2 NJ 530 N
+preplace netloc lvds_n_0_1 1 0 4 NJ 1230 NJ 1230 NJ 1230 NJ
+preplace netloc lvds_p_0_1 1 0 4 NJ 1210 NJ 1210 NJ 1210 NJ
+preplace netloc proc_sys_reset_0_peripheral_aresetn 1 1 4 380 840 660 840 1080 640 1540
+preplace netloc processing_system7_0_FCLK_CLK0 1 0 5 10 770 NJ 770 NJ 770 NJ 770 1530
+preplace netloc processing_system7_0_FCLK_CLK1 1 0 5 20 780 370 780 640 780 1070 630 1550
+preplace netloc processing_system7_0_FCLK_RESET0_N 1 0 5 30 790 NJ 790 NJ 790 1090J 760 1510
+preplace netloc axi_i2s_adi_0_dma_req_rx 1 3 1 1030 110n
+preplace netloc axi_i2s_adi_0_dma_req_tx 1 3 1 1020 90n
+preplace netloc processing_system7_0_DDR 1 4 2 NJ 70 N
+preplace netloc processing_system7_0_DMA0_ACK 1 2 3 710 350 NJ 350 1540
+preplace netloc processing_system7_0_DMA1_ACK 1 2 3 720 340 NJ 340 1520
+preplace netloc processing_system7_0_FIXED_IO 1 4 2 NJ 90 N
+preplace netloc processing_system7_0_M_AXI_GP0 1 4 1 1550 150n
+preplace netloc ps7_0_axi_periph_M00_AXI 1 2 4 650 10 NJ 10 NJ 10 1860
+preplace netloc ps7_0_axi_periph_M01_AXI 1 3 3 1100 410 NJ 410 1850
+preplace netloc ps7_0_axi_periph_M02_AXI 1 3 3 1110 420 NJ 420 1870
+preplace netloc ps7_0_axi_periph_M03_AXI 1 2 4 730 750 1030J 430 NJ 430 1880
+levelinfo -pg 1 -10 200 500 870 1310 1700 1900
+pagesize -pg 1 -db -bbox -sgen -170 0 2190 1520
+"
+}
+{
+   "da_axi4_cnt":"24",
+   "da_axi4_s2mm_cnt":"1",
+   "da_board_cnt":"4",
+   "da_clkrst_cnt":"27",
+   "da_ps7_cnt":"1"
+}

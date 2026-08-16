@@ -1,0 +1,74 @@
+#!/bin/sh
+# /usr/libexec/rpcd/luci.audiosrc
+# ubus-объект luci.audiosrc: get (реальное состояние регистра, UCI - только
+# как запасной вариант), set (переключить).
+
+. /usr/share/libubox/jshn.sh
+. /usr/lib/audiosrc/common.sh
+
+ubus_get() {
+	local uci_source hw_val hw_idx hw_source
+
+	uci_source="$(uci -q get audiosrc.settings.source)"
+	[ -n "$uci_source" ] || uci_source="radio"
+
+	# Регистр могли поменять в обход плагина (devmem2 и т.п.) - UCI тогда
+	# устарел. Читаем железо напрямую; на UCI откатываемся, только если
+	# чтение не удалось, либо значение не похоже на "0x" + 8 hex-цифр
+	# (формат вывода audiosrc), либо индекс не из известных трёх.
+	hw_val="$(read_reg 2>/dev/null)"
+	case "$hw_val" in
+		0x[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])
+			hw_idx=$((hw_val))
+			hw_source="$(name_for "$hw_idx")"
+			;;
+	esac
+
+	json_init
+	json_add_string source "${hw_source:-$uci_source}"
+	json_dump
+}
+
+ubus_set() {
+	json_load "$(cat)"
+	json_get_var new_source source
+
+	local idx
+	idx="$(idx_for "$new_source")"
+
+	if [ -z "$idx" ]; then
+		json_init
+		json_add_boolean success 0
+		json_add_string message "unknown source: $new_source"
+		json_dump
+		exit 1
+	fi
+
+	if write_reg "$idx"; then
+		uci set audiosrc.settings.source="$new_source"
+		uci commit audiosrc
+		json_init
+		json_add_boolean success 1
+		json_add_string source "$new_source"
+		json_dump
+	else
+		json_init
+		json_add_boolean success 0
+		json_add_string message "audiosrc register write failed (see logread)"
+		json_dump
+		exit 1
+	fi
+}
+
+case "$1" in
+	list)
+		echo '{ "get": {}, "set": { "source": "radio" } }'
+		;;
+	call)
+		case "$2" in
+			get) ubus_get ;;
+			set) ubus_set ;;
+			*) echo '{ "error": "method not found" }'; exit 1 ;;
+		esac
+		;;
+esac
