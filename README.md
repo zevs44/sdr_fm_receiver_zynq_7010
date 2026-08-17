@@ -17,6 +17,7 @@ full RDS protocol stack are all dedicated hardware.
 - [Features](#features)
 - [Architecture](#architecture)
 - [RF front end: direct sampling with a comparator](#rf-front-end-direct-sampling-with-a-comparator)
+- [Delta-sigma DAC output filter](#delta-sigma-dac-output-filter)
 - [Raw MPX & post-resampler audio export](#raw-mpx--post-resampler-audio-export)
 - [Repository layout](#repository-layout)
 - [Register map](#register-map-axi4-lite)
@@ -201,6 +202,60 @@ signal directly, using the FPGA's LVDS differential input buffer
 This is a deliberately minimal, passive front end (no LNA, no AGC, no
 image-reject filter beyond the single LC tank) — see
 [Known limitations](#known-limitations).
+
+## Delta-sigma DAC output filter
+
+`fm_ds_dac.v` only produces a 1-bit PDM (pulse-density-modulated) bitstream
+per channel, toggling at the DAC's own clock rate — 50 MHz. That pin is
+**not** analog audio by itself; an external analog low-pass filter is
+required between the FPGA pin and the amplifier/line input to reconstruct
+the audio waveform and reject the out-of-band PDM carrier energy.
+
+Recommended values for 50 MHz:
+
+For good sound quality (cutoff around 22 kHz):
+- Resistor (R): 1.5 kΩ (standard value)
+- Capacitor (C): 4.7 nF
+
+```
+  FPGA (ds_dac_l/r) ---[ R 1.5k ]---+-----> Analog audio out
+                                     |       (to amp / line-in)
+                                    ---
+                                    --- C 4.7n
+                                     |
+                                    GND
+```
+
+This is a **1st-order** (single-pole) RC low-pass filter — one reactive
+element, 6 dB/octave (20 dB/decade) roll-off past the cutoff — not a
+multi-pole filter. Cutoff frequency:
+
+```
+fc = 1 / (2·π·R·C) = 1 / (2·π · 1500 Ω · 4.7 nF) ≈ 22.6 kHz
+```
+
+Other technical notes:
+- **Oversampling ratio.** At a 50 MHz bit clock feeding 48 kHz audio, the
+  effective OSR is ≈50,000,000 / 48,000 ≈ 1042×, so the delta-sigma
+  modulator's quantization noise is still pushed well above the audible
+  band, just with noticeably less headroom than a higher-rate modulator
+  would give — the noise-shaped quantization noise starts climbing closer
+  to the audio band, and the PDM carrier content itself sits an order of
+  magnitude lower in frequency too. A simple 1st-order RC is still enough
+  for casual listening/monitoring straight off the pin, but with less
+  margin against audible residual noise than at a higher clock rate.
+- **When 1st order isn't enough.** With only ~1042× OSR, residual
+  PDM carrier/switching noise is more likely to be audible or leak into
+  nearby RF/analog circuitry than at a higher modulator clock — if that
+  happens, use a higher-order filter instead (2nd/3rd-order RC or LC, or
+  an active filter) — or skip the on-chip DAC altogether and use `i2s_tx`
+  into an external audio DAC (PCM5102A, MAX98357, WM8731, etc.), which is
+  what the higher-quality output path is for (see [Output](#output)).
+- **Component choice.** Both values are standard E12/E24-series parts.
+  Raising R reduces the filter's ability to drive low-impedance loads
+  (buffer with an op-amp before driving headphones directly); lowering R
+  (with C scaled to hold the same cutoff) improves drive strength at the
+  cost of a lower filter impedance loading the FPGA pin.
 
 ## Raw MPX & post-resampler audio export
 
