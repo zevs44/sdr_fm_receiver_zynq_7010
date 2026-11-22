@@ -5,12 +5,14 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=csdr
-PKG_VERSION:=2019-02-27
+# Версия в форме ГГГГ.ММ.ДД: apk из OpenWrt 25.12 отвергает версии с несколькими
+# дефисами («package version is invalid»). Исходная дата сохранена в PKG_SOURCE_DATE.
+PKG_VERSION:=2019.02.27
 PKG_RELEASE:=7
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/ha7ilm/csdr.git
-PKG_SOURCE_DATE:=$(PKG_VERSION)
+PKG_SOURCE_DATE:=2019-02-27
 # HEAD of master at the time this package was written; pin it so builds
 # are reproducible (upstream has been unmaintained since 2019).
 PKG_SOURCE_VERSION:=6ef2a74206887155290a54c7117636f66742f858
