@@ -52,6 +52,7 @@ gh repo sync zevs44/sdr_fm_receiver_zynq_7010 --branch main
 | 5 | 2026-11-22 | загрузка | `uEnv.txt` с `fpga loadb` и `clk_ignore_unused` | без загрузки PL нет радио и звука | `files/uEnv.txt` | сделано |
 | 6 | 2026-11-22 | CI | Сборка образа и слежение за релизами OpenWrt | сборка силами GitHub, реакция на новые версии | `.github/workflows/build.yml`, `.github/workflows/watch-upstream.yml` | сделано |
 | 7 | 2026-11-22 | инфраструктура | Скрипт подготовки дерева, фиксация версии, LF-переводы строк, документация сборки | воспроизводимость и защита от CRLF в патчах | `scripts/apply.sh`, `.openwrt-version`, `.gitattributes`, `.gitignore`, `BUILD.md` | сделано |
+| 8 | 2026-11-22 | документация | `docs/` — аудиопотоки, распиновка колодок, пересборка битстрима; каждый документ на английском и русском | материал полезен вне этого проекта; проектные решения и частная специфика в публикацию не входят | `docs/README.md`, `docs/README.ru.md`, `docs/audio-path*.md`, `docs/rebuild-bitstream*.md` | сделано |
 
 ## Планируемые изменения
 
