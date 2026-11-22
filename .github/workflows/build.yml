@@ -121,7 +121,19 @@ jobs:
             make -j"$(nproc)" toolchain/install
             make -j"$(nproc)" "${{ inputs.package }}/compile" V=s
           else
-            make -j"$(nproc)" world
+            set +e
+            make -j"$(nproc)" world > "$GITHUB_WORKSPACE/build.log" 2>&1
+            rc=$?
+            if [ $rc -ne 0 ]; then
+              echo "===== сборка упала, ищу пакет ====="
+              grep -E "ERROR: .* failed to build|make: \*\*\*" "$GITHUB_WORKSPACE/build.log" | tail -10
+              pkg=$(grep -oE "ERROR: [^ ]+ failed to build" "$GITHUB_WORKSPACE/build.log" | head -1 | awk '{print $2}')
+              if [ -n "$pkg" ]; then
+                echo "===== повторная сборка $pkg с V=s ====="
+                make -j1 "$pkg/compile" V=s 2>&1 | tail -150
+              fi
+            fi
+            exit $rc
           fi
 
       - name: Show failing logs
