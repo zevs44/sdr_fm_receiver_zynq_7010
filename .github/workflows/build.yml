@@ -18,6 +18,7 @@ on:
       - "target-patches/**"
       - "configs/**"
       - "files/**"
+      - "bootloader/**"
       - "bitstream/**"
       - "scripts/apply.sh"
       - ".github/workflows/build.yml"

@@ -53,6 +53,15 @@ fi
 
 echo "== 2. файлы для FAT-раздела =="
 mkdir -p "$OWRT/antminer"
+for f in boot.bin u-boot.img uboot_env.bin; do
+  if [ -f "$HERE/bootloader/$f" ]; then
+    cp "$HERE/bootloader/$f" "$OWRT/antminer/$f"
+    echo "   загрузчик: $f ($(wc -c < "$OWRT/antminer/$f") байт)"
+  else
+    echo "   ОШИБКА: нет bootloader/$f — образ будет незагружаемым" >&2
+    exit 1
+  fi
+done
 if [ -f "$HERE/bitstream/system.bit.gz" ]; then
   cp "$HERE/bitstream/system.bit.gz" "$OWRT/antminer/system.bit.gz"
   echo "   битстрим: $(wc -c < "$OWRT/antminer/system.bit.gz") байт"

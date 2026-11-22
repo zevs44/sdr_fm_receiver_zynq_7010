@@ -54,6 +54,16 @@ Workflow `.github/workflows/build.yml` запускается:
 `.github/workflows/watch-upstream.yml` раз в 6 часов проверяет новые стабильные релизы
 OpenWrt: если тег новее, чем в `.openwrt-version`, обновляет файл и запускает сборку.
 
+## Загрузчик
+
+`boot.bin`, `u-boot.img` и `uboot_env.bin` **не собираются**: они поставляются
+готовыми в `bootloader/` и копируются в образ. U-Boot из OpenWrt 25.12 (версия
+2019.07) для этой платы не собирается — поддержка в upstream написана под
+U-Boot 2026.04, а FSBL для платы строится в Vitis, а не в OpenWrt.
+
+Поэтому пакет `uboot-zynq` в бэкпорте намеренно исключён. Подробности и
+контрольные суммы — [`bootloader/README.md`](bootloader/README.md).
+
 ## Битстрим
 
 `bitstream/system.bit.gz` собирается **локально** в Vivado — в CI это невозможно

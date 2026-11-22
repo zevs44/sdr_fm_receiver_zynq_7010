@@ -1,7 +1,12 @@
 From e050bb79462219a535018c0e8022a9bcbd58b791 Mon Sep 17 00:00:00 2001
 From: Zoltan HERPAI <wigyori@uid0.hu>
-Date: Sun, 14 Jun 2026 19:37:54 +0200
-Subject: [PATCH] zynq: add Bitmain Antminer S9 control board support
+Subject: [PATCH] zynq: add Bitmain Antminer S9 control board support (without U-Boot)
+
+Backport of upstream commit e050bb7 with the package/boot/uboot-zynq
+changes removed: this fork ships a prebuilt bootloader instead of
+building U-Boot (see bootloader/README.md).
+
+
 
 This board is the control board for the Antminer S9 miners.
 
@@ -36,74 +41,6 @@ Signed-off-by: Zoltan HERPAI <wigyori@uid0.hu>
  create mode 100644 target/linux/zynq/patches/0001-dts-add-antminer-s9.patch
  create mode 100644 target/linux/zynq/patches/0002-dts-antminer-s9-led-aliases.patch
 
-diff --git a/package/boot/uboot-zynq/Makefile b/package/boot/uboot-zynq/Makefile
-index 0f93c4f4535033..c376e93d516974 100644
---- a/package/boot/uboot-zynq/Makefile
-+++ b/package/boot/uboot-zynq/Makefile
-@@ -30,6 +30,12 @@ define U-Boot/zc702
-   BUILD_DEVICES:=xlnx_zynq-zc702
- endef
- 
-+define U-Boot/antminer-s9
-+  NAME:=Bitmain Antminer S9 control board
-+  BUILD_DEVICES:=bitmain_zynq-antminer-s9
-+  UBOOT_CONFIG:=bitmain_antminer_s9
-+endef
-+
- define U-Boot/zed
-   NAME:=Avnet Digilent ZedBoard Dev Board
-   BUILD_DEVICES:=avnet_zynq-zed
-@@ -46,6 +52,7 @@ define U-Boot/zybo_z7
- endef
- 
- UBOOT_TARGETS := \
-+        antminer-s9 \
- 	zc702 \
- 	zed \
- 	zybo \
-diff --git a/package/boot/uboot-zynq/patches/120-antminer-s9-restore-sdboot-capability.patch b/package/boot/uboot-zynq/patches/120-antminer-s9-restore-sdboot-capability.patch
-new file mode 100644
-index 00000000000000..cd90fd22c9c5eb
---- /dev/null
-+++ b/package/boot/uboot-zynq/patches/120-antminer-s9-restore-sdboot-capability.patch
-@@ -0,0 +1,37 @@
-+--- a/include/configs/bitmain_antminer_s9.h
-++++ b/include/configs/bitmain_antminer_s9.h
-+@@ -20,6 +20,34 @@
-+ 	"initrd_high=0xefff000\0" \
-+ 	"devnum=0\0" \
-+ 	"wdstop=mw f8005000 ABC000\0" \
-++	"scriptaddr=0x3000000\0"        \
-++	"loadbootenv_addr=0x2000000\0" \
-++	"fit_image=fit.itb\0"           \
-++	"load_addr=0x2000000\0"         \
-++	"bootenv=uEnv.txt\0" \
-++	"bootenv_dev=mmc\0" \
-++	"loadbootenv=load ${bootenv_dev} 0 ${loadbootenv_addr} ${bootenv}\0" \
-++	"importbootenv=echo Importing environment from ${bootenv_dev} ...; " \
-++	"env import -t ${loadbootenv_addr} $filesize\0" \
-++	"bootenv_existence_test=test -e ${bootenv_dev} 0 /${bootenv}\0" \
-++	"setbootenv=if env run bootenv_existence_test; then " \
-++		"if env run loadbootenv; then " \
-++			"env run importbootenv; " \
-++		"fi; " \
-++	"fi; \0" \
-++	"sd_loadbootenv=setenv bootenv_dev mmc && " \
-++		"run setbootenv \0" \
-++		"preboot=if test $modeboot = sdboot; then " \
-++			"run sd_loadbootenv; " \
-++			"echo Checking if uenvcmd is set ...; " \
-++			"if test -n $uenvcmd; then " \
-++				"echo Running uenvcmd ...; " \
-++				"run uenvcmd; " \
-++			"fi; " \
-++		"fi; \0" \
-++	"sdboot=echo Copying FIT from SD to RAM... && " \
-++		"load mmc 0 ${load_addr} ${fit_image} && " \
-++		"bootm ${load_addr}\0" \
-+ 	BOOTENV
-+ 
-+ #include <configs/zynq-common.h>
 diff --git a/target/linux/zynq/base-files/etc/board.d/02_network b/target/linux/zynq/base-files/etc/board.d/02_network
 index 159b457682a590..63ff77dacdae46 100644
 --- a/target/linux/zynq/base-files/etc/board.d/02_network

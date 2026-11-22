@@ -57,6 +57,7 @@ gh repo sync zevs44/sdr_fm_receiver_zynq_7010 --branch main
 | 10 | 2026-11-22 | документация | Шесть SVG-схем выгружены в `docs/img/` и встроены в оба языка | схема читается быстрее таблицы; взяты только те, что описывают штатный дизайн | `docs/img/*.svg`, `docs/*.md` | сделано |
 | 11 | 2026-11-22 | документация | В SVG добавлены `xmlns` и явные `width`/`height` | без пространства имён отдельный `.svg` не отображается: GitHub отдаёт его как `image/svg+xml` с `nosniff`, и браузер не считает файл SVG | `docs/img/*.svg` | исправлено |
 | 12 | 2026-11-22 | артефакт | Добавлен `bitstream/system.bit.gz` — штатный дизайн автора из релиза `v1.0.0` (SHA-256 `7171a034…`) | без битстрима образ не поднимает PL, а собрать его в CI нельзя (node-locked лицензия Vivado) | `bitstream/system.bit.gz`, `bitstream/README.md`, `.github/workflows/build.yml` | сделано; заменить на собственную сборку |
+| 13 | 2026-11-22 | сборка | Из бэкпорта убраны изменения `package/boot/uboot-zynq`; загрузчик поставляется готовым (`bootloader/`) | U-Boot 2019.07 из 25.12 не собирается для `antminer-s9`: поддержка в upstream написана под 2026.04. Так же поступает автор в `Antminer_S9_OpenWRT` | `target-patches/0001_*.patch`, `target-patches/0200_*.patch`, `bootloader/*`, `scripts/apply.sh`, `BUILD.md` | сделано |
 
 ## Планируемые изменения
 

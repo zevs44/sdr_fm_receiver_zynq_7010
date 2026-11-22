@@ -10,3 +10,6 @@
 *.img.gz
 *.itb
 *.manifest
+
+# загрузчик поставляется готовым (boot.bin, u-boot.img, uboot_env.bin)
+!bootloader/*.img
