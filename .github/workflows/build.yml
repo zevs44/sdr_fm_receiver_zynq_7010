@@ -116,6 +116,8 @@ jobs:
           cd "$OPENWRT_DIR"
           if [ -n "${{ inputs.package }}" ]; then
             echo "сборка только пакета: ${{ inputs.package }}"
+            # host-инструменты (sed, tar, patch...) не собираются сами при адресной сборке
+            make -j"$(nproc)" tools/install
             make -j"$(nproc)" "${{ inputs.package }}/compile" V=s
           else
             make -j"$(nproc)" world
