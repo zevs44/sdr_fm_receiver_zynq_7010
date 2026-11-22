@@ -7,6 +7,10 @@ on:
         description: "Тег OpenWrt (пусто = значение из .openwrt-version)"
         required: false
         default: ""
+      package:
+        description: "Собрать только пакет (например package/boot/uboot-zynq); пусто = весь образ"
+        required: false
+        default: ""
   push:
     branches: [main]
     paths:
@@ -110,7 +114,27 @@ jobs:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
           cd "$OPENWRT_DIR"
-          make -j"$(nproc)" world
+          if [ -n "${{ inputs.package }}" ]; then
+            echo "сборка только пакета: ${{ inputs.package }}"
+            make -j"$(nproc)" "${{ inputs.package }}/compile" V=s
+          else
+            make -j"$(nproc)" world
+          fi
+
+      - name: Show failing logs
+        if: failure()
+        run: |
+          cd "$OPENWRT_DIR" || exit 0
+          found=0
+          for f in $(grep -rlE "Error [0-9]|error:" logs/ 2>/dev/null | head -5); do
+            found=1
+            echo "===== $f ====="
+            tail -60 "$f"
+          done
+          if [ "$found" = "0" ]; then
+            echo "логи с ошибками не найдены; список файлов:"
+            find logs -name '*.txt' -size +0 2>/dev/null | head -20
+          fi
 
       - name: Upload image
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
