@@ -152,6 +152,18 @@
 #include <media/v4l2-event.h>
 #include <media/v4l2-fh.h>
 
+/* ---------- ядро: совместимость ---------- */
+
+/*
+ * В Linux 6.0 удалён no_llseek(). Для устройства без поддержки позиции
+ * используется noop_llseek(); макрос оставлен ради сборки на 5.x/6.x.
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+#  define ZYNQ_FM_NO_LLSEEK	noop_llseek
+#else
+#  define ZYNQ_FM_NO_LLSEEK	no_llseek
+#endif
+
 /* ---------- constants ---------- */
 
 #define DRIVER_NAME		"zynq-fm-radio"
@@ -1056,7 +1068,7 @@ static const struct file_operations mpx_dev_fops = {
 	.release = mpx_dev_release,
 	.read    = mpx_dev_read,
 	.poll    = mpx_dev_poll,
-	.llseek  = no_llseek,
+	.llseek  = ZYNQ_FM_NO_LLSEEK,
 };
 
 static bool audio_fifo_currently_empty(struct zynq_fm_radio *radio)
@@ -1142,7 +1154,7 @@ static const struct file_operations audio_dev_fops = {
 	.release = audio_dev_release,
 	.read    = audio_dev_read,
 	.poll    = audio_dev_poll,
-	.llseek  = no_llseek,
+	.llseek  = ZYNQ_FM_NO_LLSEEK,
 };
 
 /* ================================================================

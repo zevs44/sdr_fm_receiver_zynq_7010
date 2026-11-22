@@ -59,6 +59,7 @@ gh repo sync zevs44/sdr_fm_receiver_zynq_7010 --branch main
 | 12 | 2026-11-22 | артефакт | Добавлен `bitstream/system.bit.gz` — штатный дизайн автора из релиза `v1.0.0` (SHA-256 `7171a034…`) | без битстрима образ не поднимает PL, а собрать его в CI нельзя (node-locked лицензия Vivado) | `bitstream/system.bit.gz`, `bitstream/README.md`, `.github/workflows/build.yml` | сделано; заменить на собственную сборку |
 | 13 | 2026-11-22 | сборка | Из бэкпорта убраны изменения `package/boot/uboot-zynq`; загрузчик поставляется готовым (`bootloader/`) | U-Boot 2019.07 из 25.12 не собирается для `antminer-s9`: поддержка в upstream написана под 2026.04. Так же поступает автор в `Antminer_S9_OpenWRT` | `target-patches/0001_*.patch`, `target-patches/0200_*.patch`, `bootloader/*`, `scripts/apply.sh`, `BUILD.md` | сделано |
 | 14 | 2026-11-22 | пакеты | `csdr`: `PKG_VERSION` `2019-02-27` → `2019.02.27`, исходная дата вынесена в `PKG_SOURCE_DATE` | apk в OpenWrt 25.12 отвергает версии с несколькими дефисами: «package version is invalid». Проверены все 19 пакетов — несовместим был только этот | `packages/csdr/Makefile` | сделано |
+| 15 | 2026-11-22 | пакеты | `kmod-zynq-fm-radio`: `no_llseek` заменён макросом `ZYNQ_FM_NO_LLSEEK` (в ядре 6.0 `no_llseek` удалён, используется `noop_llseek`) | пакет не собирался на ядре 6.12: `'no_llseek' undeclared` | `packages/kmod-zynq-fm-radio/src/zynq_fm_radio.c` | сделано |
 
 ## Планируемые изменения
 
