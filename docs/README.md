@@ -10,6 +10,10 @@ Reference material for this board and this design. Everything here describes the
 | [rebuild-bitstream.md](rebuild-bitstream.md) | English | Vivado installation, license, project edits, build, flashing without JTAG, common errors |
 | [rebuild-bitstream.ru.md](rebuild-bitstream.ru.md) | Русский | то же на русском |
 
+Diagrams live in `docs/img/`. They are self-contained SVG files: no external fonts,
+no raster images, a dark background baked in, so they render the same on light and
+dark themes and in any Markdown viewer.
+
 Related documents in the repository root:
 
 - [`BUILD.md`](../BUILD.md) — building the OpenWrt image (locally and in CI).

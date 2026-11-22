@@ -132,6 +132,11 @@ reset_run synth_1
 
 U-Boot loads the bitstream from the FAT partition of the SD card:
 
+![SD card boot chain](img/sd-boot-chain.svg)
+
+*The FAT partition holds the boot loader, our `uEnv.txt`, the compressed bitstream
+and the kernel; U-Boot loads the bitstream into the PL before starting Linux.*
+
 ```
 uenvcmd=load mmc 0 0x2000000 system.bit.gz; unzip 0x2000000 0x3000000;
         fpga loadb 0 0x3000000 ${filesize}; load mmc 0 0x4000000 fit.itb;

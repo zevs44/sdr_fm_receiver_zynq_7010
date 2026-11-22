@@ -130,6 +130,11 @@ reset_run synth_1
 
 U-Boot загружает битстрим из FAT-раздела SD-карты:
 
+![Цепочка загрузки с SD-карты](img/sd-boot-chain.svg)
+
+*В FAT-разделе лежат загрузчик, наш `uEnv.txt`, сжатый битстрим и ядро; U-Boot
+загружает битстрим в PL до старта Linux.*
+
 ```
 uenvcmd=load mmc 0 0x2000000 system.bit.gz; unzip 0x2000000 0x3000000;
         fpga loadb 0 0x3000000 ${filesize}; load mmc 0 0x4000000 fit.itb;

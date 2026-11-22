@@ -1,0 +1,21 @@
+<svg viewBox="0 0 460 180" width="460" role="img" aria-label="Антенна J5"><rect width="100%" height="100%" fill="#0f1419"/>
+  <defs><marker id="ah5" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#e06c75"/></marker></defs>
+  <style>.bb{fill:#222b35;stroke:#61afef;stroke-width:1.5}.tt{fill:#d8dee9;font:13px sans-serif;text-anchor:middle}.tn{fill:#8a94a3;font:11px sans-serif;text-anchor:middle}</style>
+  <rect class="bb" x="290" y="40" width="140" height="100" rx="8"/>
+  <text class="tt" x="360" y="75">FPGA</text>
+  <text class="tn" x="360" y="95">lvds_p (V15)</text>
+  <text class="tn" x="360" y="112">lvds_n (W15)</text>
+  <text class="tn" x="360" y="130">DIFF_TERM off</text>
+  <path d="M150,70 L190,70" stroke="#56b6c2" stroke-width="2"/>
+  <path d="M190,70 C196,58 204,58 210,70 C216,82 224,82 230,70 C236,58 244,58 250,70" fill="none" stroke="#e5c07b" stroke-width="2"/>
+  <text class="tn" x="220" y="55">L1 ~6–7 витков</text>
+  <path d="M250,70 L290,70" stroke="#56b6c2" stroke-width="2"/>
+  <path d="M150,110 L290,110" stroke="#56b6c2" stroke-width="2"/>
+  <path d="M210,110 L210,100 M210,120 L210,110 M222,103 L222,117 M218,103 L218,117" stroke="#61afef" stroke-width="2" fill="none"/>
+  <text class="tn" x="215" y="140">C1 22 пФ</text>
+  <path d="M60,90 L150,90" stroke="#e06c75" stroke-width="2"/>
+  <path d="M60,90 C40,80 30,70 40,55" fill="none" stroke="#e06c75" stroke-width="2"/>
+  <text class="tn" x="60" y="115">~75 см</text>
+  <text class="tn" x="100" y="80">отвод ~1.5 витка</text>
+  <path d="M150,70 L150,90" stroke="#56b6c2" stroke-width="2"/>
+</svg>
