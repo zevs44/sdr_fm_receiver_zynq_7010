@@ -1,0 +1,15 @@
+version: 2
+
+# Действия в workflow закреплены по SHA коммита, а не по тегу:
+# тег можно перепривязать к другому коммиту, SHA — нет.
+# Этот файл держит закрепления свежими: раз в неделю Dependabot
+# открывает PR с обновлением SHA и комментария версии.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
