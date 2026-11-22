@@ -46,7 +46,7 @@ gh repo sync zevs44/sdr_fm_receiver_zynq_7010 --branch main
 | № | Дата | Область | Что изменено | Зачем | Файлы | Статус |
 |---|---|---|---|---|---|---|
 | 1 | 2026-11-22 | документация | Добавлен реестр отличий от upstream | чтобы форк оставался читаемым при расхождении с оригиналом | `FORK_CHANGES.md` | сделано |
-| 2 | 2026-11-22 | сборка | Бэкпорт поддержки платы из upstream `e050bb7` (6 файлов: uboot-zynq, board.d, image/Makefile, два DTS-патча) | в ветке 25.12 платы нет | `target-patches/0001_openwrt-backport-antminer-s9.patch` | сделано, проверено на 25.12 |
+| 2 | 2026-11-22 | сборка | Бэкпорт поддержки платы из upstream `e050bb7`: `board.d/02_network`, `image/Makefile`, два DTS-патча (изменения `uboot-zynq` из коммита исключены, см. запись 13) | в ветке 25.12 платы нет | `target-patches/0001_openwrt-backport-antminer-s9.patch` | сделано, проверено на 25.12 |
 | 3 | 2026-11-22 | сборка | Копирование `system.bit.gz` в FAT-раздел и подмена `uEnv.txt` на наш | штатный образ не грузит битстрим | `target-patches/0200_zynq-sdcard-bitstream-and-uenv.patch` | сделано |
 | 4 | 2026-11-22 | конфигурация | Конфиг сборки: цель `zynq/generic`, устройство `bitmain_zynq-antminer-s9`, squashfs, пакеты автора | воспроизводимый состав образа | `configs/zynq_antminer_s9.config` | сделано |
 | 5 | 2026-11-22 | загрузка | `uEnv.txt` с `fpga loadb` и `clk_ignore_unused` | без загрузки PL нет радио и звука | `files/uEnv.txt` | сделано |
