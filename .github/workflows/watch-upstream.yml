@@ -1,0 +1,63 @@
+name: watch upstream
+
+# Раз в 6 часов проверяет, не вышел ли новый стабильный релиз OpenWrt.
+# Если вышел — обновляет .openwrt-version и запускает сборку.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find latest stable OpenWrt tag
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh api repos/openwrt/openwrt/tags --paginate --jq '.[].name' \
+                 | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+          if [ -z "$tag" ]; then
+            echo "не удалось определить тег" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "последний стабильный: $tag"
+
+      - name: Compare with pinned version
+        id: cmp
+        run: |
+          current="$(cat .openwrt-version 2>/dev/null || echo '')"
+          echo "текущий: ${current:-нет}"
+          if [ "${{ steps.latest.outputs.tag }}" = "$current" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update pinned version
+        if: steps.cmp.outputs.changed == 'true'
+        run: |
+          echo "${{ steps.latest.outputs.tag }}" > .openwrt-version
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .openwrt-version
+          git commit -m "chore: обновить OpenWrt до ${{ steps.latest.outputs.tag }}"
+          git push
+
+      - name: Trigger build
+        if: steps.cmp.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run build.yml -f openwrt_tag="${{ steps.latest.outputs.tag }}"
+          echo "сборка запущена"

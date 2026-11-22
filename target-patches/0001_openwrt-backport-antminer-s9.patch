@@ -1,0 +1,273 @@
+From e050bb79462219a535018c0e8022a9bcbd58b791 Mon Sep 17 00:00:00 2001
+From: Zoltan HERPAI <wigyori@uid0.hu>
+Date: Sun, 14 Jun 2026 19:37:54 +0200
+Subject: [PATCH] zynq: add Bitmain Antminer S9 control board support
+
+This board is the control board for the Antminer S9 miners.
+
+SoC:     Xilinx XC7Z010 - dual-core Cortex-A9 with FPGA stack
+Memory:  512Mb DDR3
+NIC:     1Gbit ethernet (BCM B50612E PHY)
+Flash:   256Mb NAND (Micron MT29F2G08ABAEAWP)
+Storage: SD-card slot
+Other:   control pins available via FPGA stack
+
+Admittedly, there is a limited number of use cases available
+for these boards outside of the miners and the lack of FPGA
+tooling in OpenWrt. However, for one, they are easily and cheaply
+available, for two, the reason for adding this is to provide an
+easy addition to the boardfarm for continuous testing of this target.
+
+Notes: For u-boot, an additional patch is required to support
+  booting from SD-cards. This is because EXTRA_ENV_SETTINGS is
+  already defined in the board's u-boot config, which is the same
+  place where the zynq-common.dtsi defines the required envvars.
+
+Signed-off-by: Zoltan HERPAI <wigyori@uid0.hu>
+---
+ package/boot/uboot-zynq/Makefile              |   7 ++
+ ...ntminer-s9-restore-sdboot-capability.patch |  37 +++++++
+ .../zynq/base-files/etc/board.d/02_network    |   1 +
+ target/linux/zynq/image/Makefile              |   7 ++
+ .../patches/0001-dts-add-antminer-s9.patch    | 102 ++++++++++++++++++
+ .../0002-dts-antminer-s9-led-aliases.patch    |  23 ++++
+ 6 files changed, 177 insertions(+)
+ create mode 100644 package/boot/uboot-zynq/patches/120-antminer-s9-restore-sdboot-capability.patch
+ create mode 100644 target/linux/zynq/patches/0001-dts-add-antminer-s9.patch
+ create mode 100644 target/linux/zynq/patches/0002-dts-antminer-s9-led-aliases.patch
+
+diff --git a/package/boot/uboot-zynq/Makefile b/package/boot/uboot-zynq/Makefile
+index 0f93c4f4535033..c376e93d516974 100644
+--- a/package/boot/uboot-zynq/Makefile
++++ b/package/boot/uboot-zynq/Makefile
+@@ -30,6 +30,12 @@ define U-Boot/zc702
+   BUILD_DEVICES:=xlnx_zynq-zc702
+ endef
+ 
++define U-Boot/antminer-s9
++  NAME:=Bitmain Antminer S9 control board
++  BUILD_DEVICES:=bitmain_zynq-antminer-s9
++  UBOOT_CONFIG:=bitmain_antminer_s9
++endef
++
+ define U-Boot/zed
+   NAME:=Avnet Digilent ZedBoard Dev Board
+   BUILD_DEVICES:=avnet_zynq-zed
+@@ -46,6 +52,7 @@ define U-Boot/zybo_z7
+ endef
+ 
+ UBOOT_TARGETS := \
++        antminer-s9 \
+ 	zc702 \
+ 	zed \
+ 	zybo \
+diff --git a/package/boot/uboot-zynq/patches/120-antminer-s9-restore-sdboot-capability.patch b/package/boot/uboot-zynq/patches/120-antminer-s9-restore-sdboot-capability.patch
+new file mode 100644
+index 00000000000000..cd90fd22c9c5eb
+--- /dev/null
++++ b/package/boot/uboot-zynq/patches/120-antminer-s9-restore-sdboot-capability.patch
+@@ -0,0 +1,37 @@
++--- a/include/configs/bitmain_antminer_s9.h
+++++ b/include/configs/bitmain_antminer_s9.h
++@@ -20,6 +20,34 @@
++ 	"initrd_high=0xefff000\0" \
++ 	"devnum=0\0" \
++ 	"wdstop=mw f8005000 ABC000\0" \
+++	"scriptaddr=0x3000000\0"        \
+++	"loadbootenv_addr=0x2000000\0" \
+++	"fit_image=fit.itb\0"           \
+++	"load_addr=0x2000000\0"         \
+++	"bootenv=uEnv.txt\0" \
+++	"bootenv_dev=mmc\0" \
+++	"loadbootenv=load ${bootenv_dev} 0 ${loadbootenv_addr} ${bootenv}\0" \
+++	"importbootenv=echo Importing environment from ${bootenv_dev} ...; " \
+++	"env import -t ${loadbootenv_addr} $filesize\0" \
+++	"bootenv_existence_test=test -e ${bootenv_dev} 0 /${bootenv}\0" \
+++	"setbootenv=if env run bootenv_existence_test; then " \
+++		"if env run loadbootenv; then " \
+++			"env run importbootenv; " \
+++		"fi; " \
+++	"fi; \0" \
+++	"sd_loadbootenv=setenv bootenv_dev mmc && " \
+++		"run setbootenv \0" \
+++		"preboot=if test $modeboot = sdboot; then " \
+++			"run sd_loadbootenv; " \
+++			"echo Checking if uenvcmd is set ...; " \
+++			"if test -n $uenvcmd; then " \
+++				"echo Running uenvcmd ...; " \
+++				"run uenvcmd; " \
+++			"fi; " \
+++		"fi; \0" \
+++	"sdboot=echo Copying FIT from SD to RAM... && " \
+++		"load mmc 0 ${load_addr} ${fit_image} && " \
+++		"bootm ${load_addr}\0" \
++ 	BOOTENV
++ 
++ #include <configs/zynq-common.h>
+diff --git a/target/linux/zynq/base-files/etc/board.d/02_network b/target/linux/zynq/base-files/etc/board.d/02_network
+index 159b457682a590..63ff77dacdae46 100644
+--- a/target/linux/zynq/base-files/etc/board.d/02_network
++++ b/target/linux/zynq/base-files/etc/board.d/02_network
+@@ -6,6 +6,7 @@ board_config_update
+ 
+ case "$(board_name)" in
+ avnet,zynq-zed | \
++bitmain,antminer-s9 | \
+ digilent,zynq-zybo | \
+ digilent,zynq-zybo-z7 | \
+ xlnx,zynq-zc702)
+diff --git a/target/linux/zynq/image/Makefile b/target/linux/zynq/image/Makefile
+index 4a9c2f047ddd20..dca6068a1287a4 100644
+--- a/target/linux/zynq/image/Makefile
++++ b/target/linux/zynq/image/Makefile
+@@ -54,6 +54,13 @@ define Device/avnet_zynq-zed
+ endef
+ TARGET_DEVICES += avnet_zynq-zed
+ 
++define Device/bitmain_zynq-antminer-s9
++	$(call Device/FitImageGzip)
++	DEVICE_VENDOR := Bitmain
++	DEVICE_MODEL := Antminer S9 control board
++endef
++TARGET_DEVICES += bitmain_zynq-antminer-s9
++
+ define Device/digilent_zynq-zybo
+ 	$(call Device/FitImageGzip)
+ 	DEVICE_VENDOR := Digilent
+diff --git a/target/linux/zynq/patches/0001-dts-add-antminer-s9.patch b/target/linux/zynq/patches/0001-dts-add-antminer-s9.patch
+new file mode 100644
+index 00000000000000..86eac897661bc1
+--- /dev/null
++++ b/target/linux/zynq/patches/0001-dts-add-antminer-s9.patch
+@@ -0,0 +1,102 @@
++--- a/arch/arm/boot/dts/xilinx/Makefile
+++++ b/arch/arm/boot/dts/xilinx/Makefile
++@@ -1,5 +1,6 @@
++ # SPDX-License-Identifier: GPL-2.0
++ dtb-$(CONFIG_ARCH_ZYNQ) += \
+++	zynq-antminer-s9.dtb \
++ 	zynq-cc108.dtb \
++ 	zynq-ebaz4205.dtb \
++ 	zynq-microzed.dtb \
++--- /dev/null
+++++ b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
++@@ -0,0 +1,90 @@
+++// SPDX-License-Identifier: GPL-2.0
+++/*
+++ *  Copyright (C) 2011 - 2014 Xilinx
+++ *  Copyright (C) 2012 National Instruments Corp.
+++ */
+++/dts-v1/;
+++#include "zynq-7000.dtsi"
+++
+++/ {
+++	model = "Bitmain Antminer S9 control board";
+++	compatible = "bitmain,antminer-s9", "xlnx,zynq-7000";
+++
+++	aliases {
+++		ethernet0 = &gem0;
+++		serial0 = &uart1;
+++		mmc0 = &sdhci0;
+++	};
+++
+++	memory@0 {
+++		device_type = "memory";
+++		reg = <0x0 0x20000000>;
+++	};
+++
+++	chosen {
+++		bootargs = "";
+++		stdout-path = "serial0:115200n8";
+++	};
+++
+++	usb_phy0: phy0 {
+++		compatible = "usb-nop-xceiv";
+++		#phy-cells = <0>;
+++	};
+++
+++	gpio-leds {
+++		compatible = "gpio-leds";
+++
+++		led_red {
+++			label = "s9:red:usr";
+++			gpios = <&gpio0 37 0x0>;
+++			default-state = "off";
+++		};
+++
+++		led_green {
+++			label = "s9:green:usr";
+++			gpios = <&gpio0 38 0x0>;
+++			default-state = "off";
+++		};
+++	};
+++};
+++
+++&clkc {
+++	ps-clk-frequency = <33333333>;
+++};
+++
+++&gem0 {
+++	status = "okay";
+++	phy-mode = "rgmii-id";
+++	phy-handle = <&ethernet_phy>;
+++
+++	ethernet_phy: ethernet-phy@1 {
+++		reg = <1>;
+++		device_type = "ethernet-phy";
+++	};
+++};
+++
+++&nfc0 {
+++	status = "okay";
+++
+++	nand@0 {
+++		reg = <0>;
+++	};
+++};
+++
+++&sdhci0 {
+++	status = "okay";
+++};
+++
+++&smcc {
+++	status = "okay";
+++};
+++
+++&uart1 {
+++	status = "okay";
+++};
+++
+++&usb0 {
+++	status = "okay";
+++	dr_mode = "host";
+++	usb-phy = <&usb_phy0>;
+++};
+diff --git a/target/linux/zynq/patches/0002-dts-antminer-s9-led-aliases.patch b/target/linux/zynq/patches/0002-dts-antminer-s9-led-aliases.patch
+new file mode 100644
+index 00000000000000..66210d1f99d249
+--- /dev/null
++++ b/target/linux/zynq/patches/0002-dts-antminer-s9-led-aliases.patch
+@@ -0,0 +1,23 @@
++--- a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
+++++ b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
++@@ -14,6 +14,11 @@
++ 		ethernet0 = &gem0;
++ 		serial0 = &uart1;
++ 		mmc0 = &sdhci0;
+++
+++		led-boot = &led_green;
+++		led-failsafe = &led_green;
+++		led-running = &led_green;
+++		led-upgrade = &led_green;
++ 	};
++ 
++ 	memory@0 {
++@@ -40,7 +45,7 @@
++ 			default-state = "off";
++ 		};
++ 
++-		led_green {
+++		led_green: led_green {
++ 			label = "s9:green:usr";
++ 			gpios = <&gpio0 38 0x0>;
++ 			default-state = "off";

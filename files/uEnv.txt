@@ -1,0 +1,9 @@
+# Загрузочное окружение U-Boot для Antminer S9.
+# Лежит в FAT-разделе SD-карты и исполняется до загрузки ядра.
+#
+# Проверено на образе автора (v1.0.0): последовательность та же,
+# добавлен clk_ignore_unused — без него PL-часы гасятся после загрузки битстрима.
+
+bootargs=console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait earlyprintk clk_ignore_unused
+
+uenvcmd=load mmc 0 0x2000000 system.bit.gz; unzip 0x2000000 0x3000000; fpga loadb 0 0x3000000 ${filesize}; load mmc 0 0x4000000 fit.itb; bootm 0x4000000

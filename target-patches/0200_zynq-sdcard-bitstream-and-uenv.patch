@@ -1,0 +1,31 @@
+diff --git a/target/linux/zynq/image/Makefile b/target/linux/zynq/image/Makefile
+index dca6068..9e10186 100644
+--- a/target/linux/zynq/image/Makefile
++++ b/target/linux/zynq/image/Makefile
+@@ -13,8 +13,9 @@ define Build/zynq-sdcard
+ 	mkfs.fat $@.boot -C $(FAT32_BLOCKS)
+ 	mcopy -i $@.boot $(STAGING_DIR_IMAGE)/$(DEVICE_NAME)-boot.bin ::boot.bin
+ 	mcopy -i $@.boot $(STAGING_DIR_IMAGE)/$(DEVICE_NAME)-u-boot.img ::u-boot.img
+-	mcopy -i $@.boot $(STAGING_DIR_IMAGE)/$(DEVICE_NAME)-uEnv.txt ::uEnv.txt
++	mcopy -i $@.boot $(UENV_FILE) ::uEnv.txt
+ 	mcopy -i $@.boot $(IMAGE_KERNEL) ::fit.itb
++	[ ! -f $(TOPDIR)/antminer/system.bit.gz ] || mcopy -i $@.boot $(TOPDIR)/antminer/system.bit.gz ::system.bit.gz
+ 	./gen_zynq_sdcard_img.sh $@ \
+ 		$@.boot \
+ 		$(IMAGE_ROOTFS) \
+@@ -34,6 +35,7 @@ define Device/Default
+ 	KERNEL_DEPENDS = $$(wildcard $(DTS_DIR)/$$(DEVICE_DTS).dts)
+ 	KERNEL_LOADADDR := 0x8000
+ 	IMAGES := sdcard.img.gz
++	UENV_FILE := $(STAGING_DIR_IMAGE)/$(DEVICE_NAME)-uEnv.txt
+ 	IMAGE/sdcard.img.gz := zynq-sdcard | gzip
+ endef
+ 
+@@ -58,6 +60,7 @@ define Device/bitmain_zynq-antminer-s9
+ 	$(call Device/FitImageGzip)
+ 	DEVICE_VENDOR := Bitmain
+ 	DEVICE_MODEL := Antminer S9 control board
++	UENV_FILE := $(TOPDIR)/antminer/uEnv.txt
+ endef
+ TARGET_DEVICES += bitmain_zynq-antminer-s9
+ 

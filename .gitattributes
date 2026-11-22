@@ -1,0 +1,11 @@
+# Единые переводы строк: в репозитории и в рабочем дереве — LF.
+# Иначе патчи, сгенерированные на Windows, приходят с CRLF и не ложатся на дерево OpenWrt.
+* text=auto eol=lf
+
+# бинарные файлы не трогаем
+*.gz binary
+*.xz binary
+*.pdf binary
+*.png binary
+*.jpg binary
+*.bit binary

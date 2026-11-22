@@ -1,0 +1,12 @@
+# дерево сборки OpenWrt (клонируется локально и в CI)
+/openwrt/
+
+# рабочие каталоги
+/.work/
+/artifacts/
+
+# результаты сборки
+*.img
+*.img.gz
+*.itb
+*.manifest
