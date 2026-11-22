@@ -61,6 +61,32 @@ OpenWrt: если тег новее, чем в `.openwrt-version`, обновл�
 
 Без файла образ соберётся, но PL останется пустым: радио и звук работать не будут.
 
+## Переход на новую версию OpenWrt
+
+Версия задаётся **в одном месте** — файле `.openwrt-version`. Всё остальное
+подхватывается автоматически: workflow читает файл, `apply.sh` берёт цель и
+подцель из конфига.
+
+| Что | Где | Сейчас | Когда менять |
+|---|---|---|---|
+| Версия OpenWrt | `.openwrt-version` | `v25.12.6` | при выходе релиза; watcher делает это сам |
+| Репозиторий OpenWrt | `build.yml` → `env.OPENWRT_REPO` | `https://github.com/openwrt/openwrt.git` | при переходе на форк или зеркало |
+| Каталог сборки | `build.yml` → `env.OPENWRT_DIR` | `openwrt` | почти никогда |
+| Цель / подцель | `build.yml` → `env.TARGET` / `env.SUBTARGET` | `zynq` / `generic` | при смене платформы |
+| Префикс артефакта | `build.yml` → `env.ARTIFACT_PREFIX` | `sdcard` | косметика |
+| Таймаут сборки | `build.yml` → `timeout-minutes` | `330` | если сборка стала дольше |
+| Репозиторий для слежения | `watch-upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
+| Файл версии | `watch-upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
+| Фильтр стабильных тегов | `watch-upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
+| Цель и устройство | `configs/zynq_antminer_s9.config` | `CONFIG_TARGET_zynq*`, `..._DEVICE_bitmain_zynq-antminer-s9` | при смене платы |
+
+Порядок перехода:
+
+1. Изменить `.openwrt-version` (или дождаться watcher'а).
+2. Запустить сборку вручную: `gh workflow run build.yml`.
+3. Если патч не лёг — пересобрать его на новой базе, см. `target-patches/README.md`.
+4. Записать изменение в `FORK_CHANGES.md`.
+
 ## Если сборка упала
 
 | Симптом | Причина | Что делать |

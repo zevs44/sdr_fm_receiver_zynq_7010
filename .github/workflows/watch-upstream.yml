@@ -12,6 +12,17 @@ permissions:
   contents: write
   actions: write
 
+# ─────────────────────────────────────────────────────────────────────
+# КОНСТАНТЫ
+# ─────────────────────────────────────────────────────────────────────
+env:
+  OPENWRT_REPO: openwrt/openwrt
+  VERSION_FILE: .openwrt-version
+  BUILD_WORKFLOW: build.yml
+  # только стабильные теги вида v25.12.6; rc и -snapshot отбрасываются
+  STABLE_TAG_REGEX: '^v[0-9]+\.[0-9]+\.[0-9]+$'
+# ─────────────────────────────────────────────────────────────────────
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -24,8 +35,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="$(gh api repos/openwrt/openwrt/tags --paginate --jq '.[].name' \
-                 | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+          tag="$(gh api "repos/$OPENWRT_REPO/tags" --paginate --jq '.[].name' \
+                 | grep -E "$STABLE_TAG_REGEX" | sort -V | tail -1)"
           if [ -z "$tag" ]; then
             echo "не удалось определить тег" >&2
             exit 1
@@ -36,7 +47,7 @@ jobs:
       - name: Compare with pinned version
         id: cmp
         run: |
-          current="$(cat .openwrt-version 2>/dev/null || echo '')"
+          current="$(tr -d '[:space:]' < "$VERSION_FILE" 2>/dev/null || true)"
           echo "текущий: ${current:-нет}"
           if [ "${{ steps.latest.outputs.tag }}" = "$current" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -47,10 +58,10 @@ jobs:
       - name: Update pinned version
         if: steps.cmp.outputs.changed == 'true'
         run: |
-          echo "${{ steps.latest.outputs.tag }}" > .openwrt-version
+          echo "${{ steps.latest.outputs.tag }}" > "$VERSION_FILE"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .openwrt-version
+          git add "$VERSION_FILE"
           git commit -m "chore: обновить OpenWrt до ${{ steps.latest.outputs.tag }}"
           git push
 
@@ -59,5 +70,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run build.yml -f openwrt_tag="${{ steps.latest.outputs.tag }}"
+          gh workflow run "$BUILD_WORKFLOW" -f openwrt_tag="${{ steps.latest.outputs.tag }}"
           echo "сборка запущена"

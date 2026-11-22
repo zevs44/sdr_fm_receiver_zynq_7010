@@ -24,6 +24,19 @@ concurrency:
 permissions:
   contents: read
 
+# ─────────────────────────────────────────────────────────────────────
+# КОНСТАНТЫ СБОРКИ
+# Меняются при переходе на другую цель или другое устройство.
+# Версия OpenWrt здесь НЕ задаётся: единственный источник — .openwrt-version.
+# ─────────────────────────────────────────────────────────────────────
+env:
+  OPENWRT_REPO: https://github.com/openwrt/openwrt.git
+  OPENWRT_DIR: openwrt
+  TARGET: zynq
+  SUBTARGET: generic
+  ARTIFACT_PREFIX: sdcard
+# ─────────────────────────────────────────────────────────────────────
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -38,10 +51,21 @@ jobs:
         run: |
           tag="${{ inputs.openwrt_tag }}"
           if [ -z "$tag" ]; then
-            tag="$(cat .openwrt-version 2>/dev/null || echo v25.12.6)"
+            tag="$(tr -d '[:space:]' < .openwrt-version 2>/dev/null || true)"
+          fi
+          if [ -z "$tag" ]; then
+            echo "ОШИБКА: .openwrt-version пуст и тег не передан вручную" >&2
+            exit 1
           fi
           echo "value=$tag" >> "$GITHUB_OUTPUT"
-          echo "Собираем OpenWrt: $tag"
+          echo "OpenWrt: $tag"
+
+      - name: Show build constants
+        run: |
+          echo "репозиторий : $OPENWRT_REPO"
+          echo "каталог     : $OPENWRT_DIR"
+          echo "цель        : $TARGET/$SUBTARGET"
+          echo "тег         : ${{ steps.tag.outputs.value }}"
 
       - name: Free disk space
         run: |
@@ -61,10 +85,10 @@ jobs:
       - name: Clone OpenWrt
         run: |
           git clone --depth 1 -b "${{ steps.tag.outputs.value }}" \
-            https://github.com/openwrt/openwrt.git openwrt
+            "$OPENWRT_REPO" "$OPENWRT_DIR"
 
       - name: Apply patches and configure
-        run: bash scripts/apply.sh ./openwrt
+        run: bash scripts/apply.sh "./$OPENWRT_DIR"
 
       - name: Restore ccache
         uses: actions/cache@v4
@@ -78,25 +102,25 @@ jobs:
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
-          cd openwrt
+          cd "$OPENWRT_DIR"
           make -j"$(nproc)" download
 
       - name: Build
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
-          cd openwrt
+          cd "$OPENWRT_DIR"
           make -j"$(nproc)" world
 
       - name: Upload image
         uses: actions/upload-artifact@v4
         with:
-          name: sdcard-${{ steps.tag.outputs.value }}
+          name: ${{ env.ARTIFACT_PREFIX }}-${{ steps.tag.outputs.value }}
           path: |
-            openwrt/bin/targets/zynq/generic/*.img.gz
-            openwrt/bin/targets/zynq/generic/*.manifest
-            openwrt/bin/targets/zynq/generic/profiles.json
-            openwrt/.config
+            ${{ env.OPENWRT_DIR }}/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.img.gz
+            ${{ env.OPENWRT_DIR }}/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.manifest
+            ${{ env.OPENWRT_DIR }}/bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/profiles.json
+            ${{ env.OPENWRT_DIR }}/.config
           if-no-files-found: error
           retention-days: 30
 
@@ -106,6 +130,6 @@ jobs:
         with:
           name: build-logs-${{ github.run_id }}
           path: |
-            openwrt/logs/
+            ${{ env.OPENWRT_DIR }}/logs/
           if-no-files-found: ignore
           retention-days: 7

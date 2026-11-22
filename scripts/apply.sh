@@ -18,10 +18,16 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OWRT="${1:-$HERE/openwrt}"
+CFG="$HERE/configs/zynq_antminer_s9.config"
+VERSION="$(tr -d '[:space:]' < "$HERE/.openwrt-version" 2>/dev/null || echo '')"
+
+# цель и подцель берутся из конфига, чтобы не дублировать их в скрипте
+TARGET="$(sed -n 's/^CONFIG_TARGET_\([a-z0-9]*\)=y$/\1/p' "$CFG" | head -1)"
+SUBTARGET="$(sed -n 's/^CONFIG_TARGET_[a-z0-9]*_\([a-z0-9]*\)=y$/\1/p' "$CFG" | head -1)"
 
 if [ ! -d "$OWRT" ]; then
   echo "ОШИБКА: каталог OpenWrt не найден: $OWRT" >&2
-  echo "Склонируйте его: git clone --depth 1 -b v25.12.6 https://github.com/openwrt/openwrt.git $OWRT" >&2
+  echo "Склонируйте его: git clone --depth 1 -b ${VERSION:-<тег>} https://github.com/openwrt/openwrt.git $OWRT" >&2
   exit 1
 fi
 
@@ -68,10 +74,10 @@ fi
 ./scripts/feeds install -a -p antminer
 
 echo "== 4. конфигурация =="
-cp "$HERE/configs/zynq_antminer_s9.config" .config
+cp "$CFG" .config
 make defconfig
 
 echo
 echo "Готово. Дальше:"
 echo "  cd $OWRT && make -j\$(nproc) download && make -j\$(nproc) world"
-echo "Результат: $OWRT/bin/targets/zynq/generic/"
+echo "Результат: $OWRT/bin/targets/${TARGET:-<цель>}/${SUBTARGET:-<подцель>}/"
