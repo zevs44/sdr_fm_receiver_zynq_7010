@@ -86,6 +86,32 @@ fi
 # и молча выпадают из конфига.
 ./scripts/feeds install -a
 
+echo "== 3b. конфликт /etc/init.d/mpd =="
+# mpd-full и luci-app-mympd оба ставят /etc/init.d/mpd. opkg (OpenWrt 24.10,
+# на которой собирает автор) ограничивается предупреждением и оставляет файл
+# последнего установленного пакета; apk (25.12) считает это ошибкой установки
+# и валит package/install: «trying to overwrite etc/init.d/mpd owned by
+# mpd-full». Авторитетный скрипт — из luci-app-mympd: он создаёт пользователя,
+# каталоги и mpd.conf при каждом старте, а не только в postinst. Поэтому
+# убираем установку файла из mpd-full. Если строка исчезнет в новой версии
+# фида — падаем громко, а не собираем образ с двумя владельцами одного пути.
+mpd_mk="$OWRT/feeds/packages/sound/mpd/Makefile"
+if [ ! -f "$mpd_mk" ]; then
+  echo "   ОШИБКА: нет $mpd_mk — фид packages не установлен" >&2
+  exit 1
+fi
+if [ "$(grep -c 'INSTALL_BIN) ./files/mpd.init' "$mpd_mk" || true)" -ne 1 ]; then
+  echo "   ОШИБКА: в $mpd_mk не найдена ровно одна установка mpd.init" >&2
+  echo "   Возможно, обновился пакет mpd — проверьте вручную." >&2
+  exit 1
+fi
+sed -i 's|^\([[:space:]]*\)\$(INSTALL_BIN) \./files/mpd\.init \$(1)/etc/init\.d/mpd|\1# /etc/init.d/mpd ставит luci-app-mympd — см. scripts/apply.sh|' "$mpd_mk"
+if grep -q 'INSTALL_BIN) ./files/mpd.init' "$mpd_mk"; then
+  echo "   ОШИБКА: строку установки mpd.init вырезать не удалось" >&2
+  exit 1
+fi
+echo "   ok  mpd-full больше не ставит /etc/init.d/mpd"
+
 echo "== 4. конфигурация =="
 cp "$CFG" .config
 make defconfig

@@ -26,12 +26,10 @@ define Package/luci-app-mympd
   TITLE:=LuCI App for myMPD
   URL:=https://github.com/jcorporation/mympd
   # NOTE: +mpd added per explicit request. This package ships its OWN
-  # /etc/init.d/mpd (see the description below); if the "mpd" package in
-  # your feed also installs /etc/init.d/mpd, opkg will report a file
-  # conflict on install (two packages claiming the same path). If that
-  # happens: check whether your feed splits mpd into separate
-  # binary/init packages, or fall back to installing just the mpd
-  # *binary* by hand and dropping +mpd from DEPENDS again.
+  # /etc/init.d/mpd (see the description below), and mpd-full installs the
+  # same path. Under opkg that was only a warning; under apk (OpenWrt 25.12)
+  # it aborts package/install. scripts/apply.sh removes the init-script
+  # install from the mpd feed so this package's script is the only owner.
   DEPENDS:=+luci-base +mpc +alsa-utils +mpd
   PKGARCH:=all
 endef
@@ -72,7 +70,8 @@ define Package/luci-app-mympd/description
   unprivileged "mpd" system account, runtime directories, and a default
   mpd.conf (MPD drops root via its own "user" directive; control port
   defaults to 127.0.0.1 only). Do not also install the upstream "mpd"
-  package's init script, as both write to the same path.
+  package's init script, as both write to the same path. In this fork
+  scripts/apply.sh removes that file from the mpd feed before the build.
 endef
 
 # Nothing to download, configure, or compile — pure JS/JSON package
