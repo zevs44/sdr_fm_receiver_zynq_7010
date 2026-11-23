@@ -37,7 +37,12 @@ bash scripts/apply.sh ./openwrt
 # 3. сборка
 cd openwrt
 make -j"$(nproc)" download
-make -j"$(nproc)" world
+make -j"$(nproc)" -k world
+
+# 4. проверки (из корня репозитория)
+sha256sum -c scripts/expected-artifacts.sha256      # входные двоичные файлы
+bash scripts/check_config.sh ./openwrt              # defconfig ничего не выбросил
+bash scripts/verify_image.sh ./openwrt/bin/targets/zynq/generic   # образ работоспособен
 ```
 
 Результат: `openwrt/bin/targets/zynq/generic/*.img.gz`.
@@ -46,13 +51,43 @@ make -j"$(nproc)" world
 
 Workflow `.github/workflows/build.yml` запускается:
 
-- вручную (`workflow_dispatch`, можно указать тег OpenWrt);
-- при изменениях в `packages/`, `target-patches/`, `configs/`, `files/`, `scripts/apply.sh`.
+- вручную (`workflow_dispatch`, можно указать тег OpenWrt, пакет и параллельность);
+- при изменениях в `packages/`, `target-patches/`, `configs/`, `files/`,
+  `bootloader/`, `bitstream/`, `scripts/`, `.github/workflows/build.yml`.
 
 Образ и итоговый `.config` выкладываются артефактом `sdcard-<тег>`.
+`build.log`, `.config`, `build-info.txt`, `patch-status.txt` и `openwrt/logs/`
+выкладываются артефактом `build-logs-<run_id>` — **всегда**, не только при падении:
+без успешного лога не с чем сравнивать.
+
+Сборка идёт как `make -k world`: при ошибке она не останавливается на первом
+пакете, а доводит проход и печатает **все** сломанные пакеты. Это экономит
+полный прогон (~1,5 ч) на каждый следующий дефект.
 
 `.github/workflows/watch-upstream.yml` раз в 6 часов проверяет новые стабильные релизы
 OpenWrt: если тег новее, чем в `.openwrt-version`, обновляет файл и запускает сборку.
+
+### Что проверяется до и после сборки
+
+| Проверка | Где | Что ловит |
+|---|---|---|
+| `shellcheck`, `actionlint` | джоба `lint` | ошибки в скриптах и YAML workflow |
+| `scripts/expected-artifacts.sha256` + магия битстрима | шаг «Verify input artifacts» | битый коммит, порча переводов строк, подмена двоичного файла |
+| ожидаемые файлы в диффе | шаг «Audit patch layer» | патч лёг частично или не лёг вовсе |
+| `scripts/check_config.sh` | шаг «Verify config» | `defconfig` молча выбросил пакет или поменял значение |
+| `scripts/verify_image.sh` | шаг «Verify image» | образ без битстрима, без kmod, с чужим деревом устройства |
+
+Проверки запускаются и локально:
+
+```bash
+sha256sum -c scripts/expected-artifacts.sha256
+bash scripts/check_config.sh ./openwrt
+bash scripts/verify_image.sh ./openwrt/bin/targets/zynq/generic
+```
+
+`verify_image.sh` требует `sfdisk`, `mtools`, `dosfstools`, `squashfs-tools`.
+Отсутствие битстрима считается провалом: такой образ грузится, но PL остаётся
+пустым. Осознанно собрать образ без него: `ALLOW_MISSING_BITSTREAM=1`.
 
 ## Загрузчик
 
@@ -122,6 +157,7 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 | Цель / подцель | `build.yml` → `env.TARGET` / `env.SUBTARGET` | `zynq` / `generic` | при смене платформы |
 | Префикс артефакта | `build.yml` → `env.ARTIFACT_PREFIX` | `sdcard` | косметика |
 | Таймаут сборки | `build.yml` → `timeout-minutes` | `330` | если сборка стала дольше |
+| Параллельность make | `build.yml` → `env.DEFAULT_JOBS` | `4` (не больше `nproc`) | при OOM — снижать; при большом раннере — поднимать |
 | Репозиторий для слежения | `watch-upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
 | Файл версии | `watch-upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
 | Фильтр стабильных тегов | `watch-upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
@@ -143,5 +179,9 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 | пакет автора не собирается | дрейф API ядра или LuCI | править пакет, запись в `FORK_CHANGES.md` |
 | `No space left on device` | мало места | освободить диск, `make clean` |
 | образ есть, но плата не грузится | нет `boot.bin`/`uEnv.txt` в FAT | проверить, что `apply.sh` отработал без ошибок |
+| `Verify config` упал на `CONFIG_PACKAGE_*` | `defconfig` выбросил пакет: нет в фидах или не разрешилась зависимость | смотреть шаг «Verify config», чинить зависимость пакета |
+| `Verify image` упал | собрался, но образ неработоспособен | таблица `PASS/FAIL` в шаге; битстрим, kmod, дерево устройства |
+| сборка упала, но имени пакета нет | падение на установке пакетов или сборке образа | шаг `Build` печатает хвост `build.log`; целиком — в артефакте `build-logs-<run_id>` |
 
-Логи сборки: `openwrt/logs/`; в CI они выкладываются артефактом при падении.
+Логи сборки: `openwrt/logs/`; в CI они выкладываются артефактом `build-logs-<run_id>`
+вместе с `build.log`, `.config`, `build-info.txt` и `patch-status.txt`.

@@ -11,6 +11,10 @@ on:
         description: "Собрать только пакет (например package/boot/uboot-zynq); пусто = весь образ"
         required: false
         default: ""
+      jobs:
+        description: "Параллельность make (пусто = min(nproc,4))"
+        required: false
+        default: ""
   push:
     branches: [main]
     paths:
@@ -20,7 +24,7 @@ on:
       - "files/**"
       - "bootloader/**"
       - "bitstream/**"
-      - "scripts/apply.sh"
+      - "scripts/**"
       - ".github/workflows/build.yml"
 
 concurrency:
@@ -41,16 +45,43 @@ env:
   TARGET: zynq
   SUBTARGET: generic
   ARTIFACT_PREFIX: sdcard
+  DEFAULT_JOBS: "4"
+  ACTIONLINT_VERSION: "1.7.12"
+  ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
 # ─────────────────────────────────────────────────────────────────────
 
 jobs:
+  # Быстрые проверки того, что мы вообще запускаем: YAML workflow и скрипты.
+  # Идут параллельно со сборкой: провал виден сразу, но 90-минутную сборку не блокирует.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck --version
+          shellcheck -S warning scripts/*.sh
+
+      - name: actionlint
+        run: |
+          url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o /tmp/actionlint.tgz "$url"
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tgz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tgz -C /tmp actionlint
+          /tmp/actionlint -color
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 330
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Resolve OpenWrt tag
         id: tag
@@ -66,12 +97,27 @@ jobs:
           echo "value=$tag" >> "$GITHUB_OUTPUT"
           echo "OpenWrt: $tag"
 
+      - name: Resolve build parallelism
+        id: jobs
+        run: |
+          jobs="${{ inputs.jobs }}"
+          if [ -z "$jobs" ]; then
+            jobs="$DEFAULT_JOBS"
+            ncpu="$(nproc)"
+            if [ "$ncpu" -lt "$jobs" ]; then
+              jobs="$ncpu"
+            fi
+          fi
+          echo "value=$jobs" >> "$GITHUB_OUTPUT"
+          echo "параллельность make: $jobs (nproc $(nproc))"
+
       - name: Show build constants
         run: |
           echo "репозиторий : $OPENWRT_REPO"
           echo "каталог     : $OPENWRT_DIR"
           echo "цель        : $TARGET/$SUBTARGET"
           echo "тег         : ${{ steps.tag.outputs.value }}"
+          echo "jobs        : ${{ steps.jobs.outputs.value }}"
 
       - name: Free disk space
         run: |
@@ -86,7 +132,22 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
             gettext git libncurses-dev libssl-dev python3 python3-setuptools \
-            rsync unzip zlib1g-dev file libelf-dev wget ca-certificates ccache
+            rsync unzip zlib1g-dev file libelf-dev wget ca-certificates ccache \
+            squashfs-tools mtools dosfstools fdisk device-tree-compiler
+
+      # Ловит битый коммит, порчу переводов строк и подмену двоичных файлов
+      # до 90-минутной сборки.
+      - name: Verify input artifacts
+        run: |
+          sha256sum -c scripts/expected-artifacts.sha256
+          gzip -t bitstream/system.bit.gz
+          # `|| true`: head закрывает поток раньше gzip, а GitHub включает pipefail
+          magic="$(gzip -dc bitstream/system.bit.gz 2>/dev/null | head -c 4 | od -An -tx1 | tr -d ' \n' || true)"
+          if [ "$magic" != "00090ff0" ]; then
+            echo "ОШИБКА: магия битстрима $magic, ожидалась 00090ff0" >&2
+            exit 1
+          fi
+          echo "входные артефакты в порядке"
 
       - name: Clone OpenWrt
         run: |
@@ -96,61 +157,141 @@ jobs:
       - name: Apply patches and configure
         run: bash scripts/apply.sh "./$OPENWRT_DIR"
 
+      # Патчи могли лечь частично: сверяем, что затронуты ожидаемые файлы.
+      - name: Audit patch layer
+        run: |
+          cd "$OPENWRT_DIR"
+          git diff --stat
+          failed=0
+          for f in \
+            target/linux/zynq/image/Makefile \
+            target/linux/zynq/base-files/etc/board.d/02_network \
+            target/linux/zynq/patches/0001-dts-add-antminer-s9.patch ; do
+            if git diff --quiet -- "$f"; then
+              echo "ОШИБКА: патч не изменил $f" >&2
+              failed=1
+            else
+              echo "ok  $f"
+            fi
+          done
+          git status --short > "$GITHUB_WORKSPACE/patch-status.txt"
+          exit $failed
+
+      # `make defconfig` молча выбрасывает неразрешившиеся символы: без этой
+      # проверки образ собирается без нужных пакетов и CI остаётся зелёным.
+      - name: Verify config
+        run: bash scripts/check_config.sh "./$OPENWRT_DIR" configs/zynq_antminer_s9.config
+
       - name: Restore ccache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.ccache
+          # тот же каталог, что и CCACHE_DIR ниже: раньше кэш сохранялся из
+          # ~/.ccache, а сборка писала в $GITHUB_WORKSPACE/.ccache — кэш не работал
+          path: ${{ github.workspace }}/.ccache
           key: ccache-${{ steps.tag.outputs.value }}-${{ hashFiles('configs/**', 'target-patches/**', 'packages/**') }}
           restore-keys: |
             ccache-${{ steps.tag.outputs.value }}-
 
       - name: Download sources
+        timeout-minutes: 90
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
           cd "$OPENWRT_DIR"
-          make -j"$(nproc)" download
+          ok=0
+          for attempt in 1 2 3; do
+            if make -j"${{ steps.jobs.outputs.value }}" download; then
+              ok=1
+              break
+            fi
+            echo "===== попытка $attempt не удалась, пауза 20 с =====" >&2
+            sleep 20
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "ОШИБКА: не удалось скачать исходники за три попытки" >&2
+            exit 1
+          fi
 
       - name: Build
+        timeout-minutes: 300
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
           cd "$OPENWRT_DIR"
+          JOBS="${{ steps.jobs.outputs.value }}"
           if [ -n "${{ inputs.package }}" ]; then
             echo "сборка только пакета: ${{ inputs.package }}"
             # адресная сборка не тянет за собой host-инструменты и тулчейн
-            make -j"$(nproc)" tools/install
-            make -j"$(nproc)" toolchain/install
-            make -j"$(nproc)" "${{ inputs.package }}/compile" V=s
-          else
-            set +e
-            make -j"$(nproc)" world > "$GITHUB_WORKSPACE/build.log" 2>&1
-            rc=$?
-            if [ $rc -ne 0 ]; then
-              echo "===== сборка упала, ищу пакет ====="
-              # ловим и вложенные make: падение образа/установки идёт из make[1]/make[2],
-              # а не только из верхнего make — шаблон "make: ***" их пропускал
-              grep -E "ERROR: .* failed to build|make(\[[0-9]+\])?: \*\*\*" "$GITHUB_WORKSPACE/build.log" | tail -20
-              pkg=$(grep -oE "ERROR: [^ ]+ failed to build" "$GITHUB_WORKSPACE/build.log" | head -1 | awk '{print $2}')
-              if [ -n "$pkg" ]; then
-                echo "===== повторная сборка $pkg с V=s ====="
-                make -j1 "$pkg/compile" V=s 2>&1 | tail -150
-              else
-                # пакет не назван — значит упало на установке пакетов или сборке образа;
-                # без хвоста лога причину не восстановить (так потерялся прогон 45062377171)
-                echo "===== ошибки в build.log ====="
-                grep -nE "Error [0-9]+|error:|ERROR:|No space left|Killed|command not found" \
-                  "$GITHUB_WORKSPACE/build.log" | tail -40
-                echo "===== последние 120 строк build.log ====="
-                tail -n 120 "$GITHUB_WORKSPACE/build.log"
-              fi
-              echo "===== диск и память ====="
-              df -h / | tail -1
-              free -m || true
-              dmesg 2>/dev/null | grep -iE "out of memory|killed process" | tail -5 || true
-            fi
-            exit $rc
+            make -j"$JOBS" tools/install
+            make -j"$JOBS" toolchain/install
+            make -j"$JOBS" "${{ inputs.package }}/compile" V=s
+            exit $?
           fi
+
+          set +e
+          # -k: продолжаем после ошибки, чтобы увидеть ВСЕ сломанные пакеты
+          # за один прогон, а не по одному на цикл в полтора часа.
+          make -j"$JOBS" -k world > "$GITHUB_WORKSPACE/build.log" 2>&1
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "===== сборка упала, ищу пакет ====="
+            grep -E "ERROR: .* failed to build|make(\[[0-9]+\])?: \*\*\*" "$GITHUB_WORKSPACE/build.log" | tail -40
+
+            mapfile -t failed < <(grep -oE "ERROR: [^ ]+ failed to build" "$GITHUB_WORKSPACE/build.log" \
+                                  | awk '{print $2}' | sort -u)
+            if [ "${#failed[@]}" -gt 0 ]; then
+              echo "===== сломанных пакетов: ${#failed[@]} ====="
+              printf '  - %s\n' "${failed[@]}"
+              echo "===== повторная сборка ${failed[0]} с V=s ====="
+              make -j1 "${failed[0]}/compile" V=s 2>&1 | tail -150
+            else
+              # пакет не назван: падение на установке пакетов или сборке образа.
+              # Без хвоста лога причину не восстановить (так потерялся прогон 45062377171).
+              echo "===== пакет не назван: ошибки в build.log ====="
+              grep -nE "Error [0-9]+|error:|ERROR:|No space left|Killed|command not found" \
+                "$GITHUB_WORKSPACE/build.log" | tail -40
+              echo "===== последние 120 строк build.log ====="
+              tail -n 120 "$GITHUB_WORKSPACE/build.log"
+            fi
+
+            echo "===== диск и память ====="
+            df -h / | tail -1
+            free -m || true
+            dmesg 2>/dev/null | grep -iE "out of memory|killed process" | tail -5 || true
+          fi
+          exit $rc
+
+      # Проверка не только «файл существует», но и «образ работоспособен».
+      - name: Verify image
+        if: success()
+        run: bash scripts/verify_image.sh "./$OPENWRT_DIR/bin/targets/$TARGET/$SUBTARGET"
+
+      - name: Collect build info
+        if: always()
+        run: |
+          {
+            echo "commit          : $(git rev-parse HEAD)"
+            echo "openwrt_tag     : ${{ steps.tag.outputs.value }}"
+            echo "target          : $TARGET/$SUBTARGET"
+            echo "jobs            : ${{ steps.jobs.outputs.value }}"
+            echo "date_utc        : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "config_sha256   : $(sha256sum "$OPENWRT_DIR/.config" 2>/dev/null | cut -d' ' -f1)"
+            for f in "$OPENWRT_DIR"/bin/targets/"$TARGET"/"$SUBTARGET"/*.img.gz; do
+              [ -f "$f" ] || continue
+              echo "image           : $(basename "$f") $(wc -c < "$f") байт"
+              echo "image_sha256    : $(sha256sum "$f" | cut -d' ' -f1)"
+            done
+            echo
+            echo "--- ccache ---"
+            ccache -s 2>/dev/null || echo "ccache -s недоступен"
+            echo
+            echo "--- диск ---"
+            df -h / | tail -1
+            echo "--- память ---"
+            free -m || true
+          } > "$GITHUB_WORKSPACE/build-info.txt"
+          cat "$GITHUB_WORKSPACE/build-info.txt"
 
       - name: Show failing logs
         if: failure()
@@ -170,7 +311,7 @@ jobs:
           fi
 
       - name: Upload image
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ARTIFACT_PREFIX }}-${{ steps.tag.outputs.value }}
           path: |
@@ -181,13 +322,18 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # Логи нужны и при успехе: без базовой линии не с чем сравнивать,
+      # а build.log — единственное место, куда ушёл весь вывод make world.
       - name: Upload build logs
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-logs-${{ github.run_id }}
           path: |
             build.log
+            build-info.txt
+            patch-status.txt
+            ${{ env.OPENWRT_DIR }}/.config
             ${{ env.OPENWRT_DIR }}/logs/
           if-no-files-found: ignore
           retention-days: 7

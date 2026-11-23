@@ -2,7 +2,7 @@
 
 > **Форк:** https://github.com/zevs44/sdr_fm_receiver_zynq_7010
 > **Родитель:** https://github.com/alexsys87/sdr_fm_receiver_zynq_7010
-> **Актуально на:** 2026-11-22
+> **Актуально на:** 2026-11-23
 
 ## Зачем этот файл
 
@@ -62,6 +62,9 @@ gh repo sync zevs44/sdr_fm_receiver_zynq_7010 --branch main
 | 15 | 2026-11-22 | пакеты | `kmod-zynq-fm-radio`: `no_llseek` заменён макросом `ZYNQ_FM_NO_LLSEEK` (в ядре 6.0 `no_llseek` удалён, используется `noop_llseek`) | пакет не собирался на ядре 6.12: `'no_llseek' undeclared` | `packages/kmod-zynq-fm-radio/src/zynq_fm_radio.c` | сделано |
 | 16 | 2026-11-22 | конфигурация | Включены kmod для nftables: `kmod-nft-core`, `-queue`, `-nat`, `-compat`, `kmod-nf-conntrack`, плюс `nftables-json` и `ca-bundle` | `b4` ставится в рантайме официальным скриптом, но требует эти модули; с официальных фидов они не встанут из-за версии ядра. `kmod-nft-conntrack` в 25.12 нет — conntrack даёт `kmod-nf-conntrack` | `configs/zynq_antminer_s9.config` | сделано |
 | 17 | 2026-11-23 | CI | Диагностика падений: `build.log` выкладывается артефактом и печатается в лог шага; ловятся вложенные `make[1]/make[2]: ***`, ошибки образа и установки, `No space left`, OOM; выводятся диск и память | прогон `45062377171` упал без единой улики: весь вывод `make world` уходил в `build.log`, который не сохранялся, а `grep "make: \*\*\*"` не видел вложенных make. Причину восстановить было нельзя | `.github/workflows/build.yml` | сделано |
+| 18 | 2026-11-23 | CI | `make -k world` вместо `make world`: в лог попадают **все** сломанные пакеты за один прогон; параллельность `-j` вынесена в вход и ограничена `min(nproc,4)`; ретраи на `make download`; таймауты шагов; кэш ccache сохранён из того каталога, куда сборка действительно пишет | цикл «один сломанный пакет — один прогон в 1,5 ч»; сетевые сбои роняли сборку; `actions/cache` кэшировал `~/.ccache`, а `CCACHE_DIR` указывал на `$GITHUB_WORKSPACE/.ccache` — кэш не работал вовсе | `.github/workflows/build.yml` | сделано |
+| 19 | 2026-11-23 | проверки | Добавлены `scripts/expected-artifacts.sha256`, `scripts/check_config.sh`, `scripts/verify_image.sh` и соответствующие шаги CI. Джоба `lint` — `shellcheck` + `actionlint` (actionlint скачивается по версии с проверкой SHA-256) | CI был зелёным при любом непустом `*.img.gz`: образ без битстрима или без kmod проходил все проверки. `defconfig` молча выбрасывал пакеты, патчи могли лечь частично, бинарные файлы — испортиться | `scripts/expected-artifacts.sha256`, `scripts/check_config.sh`, `scripts/verify_image.sh`, `.github/workflows/build.yml`, `BUILD.md` | сделано |
+| 20 | 2026-11-23 | CI | `actions/checkout` v4.4.0 → v7.0.1, `actions/cache` v4.3.0 → v6.1.0, `actions/upload-artifact` v4.6.2 → v7.0.2 (все на `node24`) | GitHub принудительно перевёл действия с `node20` на `node24` и предупреждал в каждом прогоне; рано или поздно старые версии перестанут запускаться. Используемые входы в новых версиях сохранены | `.github/workflows/build.yml`, `.github/workflows/watch-upstream.yml` | сделано |
 
 ## Планируемые изменения
 

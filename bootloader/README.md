@@ -47,9 +47,16 @@ FAT-раздел образа `openwrt-zynq-s9-antminer_s9-ext4-sdcard.img.xz`.
 
 ## Проверка
 
+Из корня репозитория:
+
 ```bash
-ls -l bootloader/
+# контрольные суммы всех входных двоичных файлов сразу
+sha256sum -c scripts/expected-artifacts.sha256
+
+# либо только загрузчик
 sha256sum bootloader/*
-# FSBL начинается с заголовка Xilinx: слово 0xAA995566 присутствует в первых байтах
-head -c 64 bootloader/boot.bin | od -An -tx1 | head -4
 ```
+
+`boot.bin` начинается с векторов ARM (`fe ff ff ea` ×4), а не с заголовка Xilinx:
+это готовый FSBL, а не bit-файл. Достоверная проверка — контрольная сумма;
+машиночитаемый список — `scripts/expected-artifacts.sha256` в корне репозитория.
