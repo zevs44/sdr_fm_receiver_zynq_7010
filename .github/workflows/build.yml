@@ -163,17 +163,23 @@ jobs:
           cd "$OPENWRT_DIR"
           git diff --stat
           failed=0
-          for f in \
-            target/linux/zynq/image/Makefile \
-            target/linux/zynq/base-files/etc/board.d/02_network \
-            target/linux/zynq/patches/0001-dts-add-antminer-s9.patch ; do
-            if git diff --quiet -- "$f"; then
-              echo "ОШИБКА: патч не изменил $f" >&2
-              failed=1
+          # Патч может изменить существующий файл или добавить новый.
+          # Новые файлы git apply кладёт как untracked — git diff их не показывает,
+          # поэтому проверяем оба случая.
+          check_patched() {
+            if [ -f "$1" ] && ! git ls-files --error-unmatch -- "$1" >/dev/null 2>&1; then
+              echo "ok  $1 (новый файл из патча)"
+            elif [ -f "$1" ] && ! git diff --quiet -- "$1"; then
+              echo "ok  $1 (изменён патчем)"
             else
-              echo "ok  $f"
+              echo "ОШИБКА: патч не изменил $1" >&2
+              failed=1
             fi
-          done
+          }
+          check_patched target/linux/zynq/image/Makefile
+          check_patched target/linux/zynq/base-files/etc/board.d/02_network
+          check_patched target/linux/zynq/patches/0001-dts-add-antminer-s9.patch
+          check_patched target/linux/zynq/patches/0002-dts-antminer-s9-led-aliases.patch
           git status --short > "$GITHUB_WORKSPACE/patch-status.txt"
           exit $failed
 
@@ -321,6 +327,8 @@ jobs:
             ${{ env.OPENWRT_DIR }}/.config
           if-no-files-found: error
           retention-days: 30
+          # .config — скрытый файл; без этого флага upload-artifact его пропускает
+          include-hidden-files: true
 
       # Логи нужны и при успехе: без базовой линии не с чем сравнивать,
       # а build.log — единственное место, куда ушёл весь вывод make world.
@@ -337,3 +345,4 @@ jobs:
             ${{ env.OPENWRT_DIR }}/logs/
           if-no-files-found: ignore
           retention-days: 7
+          include-hidden-files: true
