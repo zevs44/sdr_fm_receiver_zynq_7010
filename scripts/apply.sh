@@ -9,7 +9,7 @@
 # Что делает:
 #   1. накладывает все патчи из target-patches/ по порядку (с проверкой, что ложатся);
 #   2. копирует битстрим в дерево сборки (если он есть);
-#   3. подключает feeds автора как локальный src-link;
+#   3. подключает фид автора как локальный src-link и ставит все фиды;
 #   4. ставит наш .config и запускает make defconfig.
 #
 # Код возврата 0 — дерево готово к `make world`.
@@ -80,7 +80,11 @@ else
   echo "   src-link antminer уже подключён"
 fi
 ./scripts/feeds update -a
-./scripts/feeds install -a -p antminer
+# Ставим ВСЕ фиды, а не только antminer: `feeds install -p antminer` подтягивает
+# лишь зависимости пакетов автора, и тогда LuCI-тема, luci-ssl, i2c-tools и другие
+# «необязательные» пакеты из официальных фидов остаются невидимыми для defconfig
+# и молча выпадают из конфига.
+./scripts/feeds install -a
 
 echo "== 4. конфигурация =="
 cp "$CFG" .config
