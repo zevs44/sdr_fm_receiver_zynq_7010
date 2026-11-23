@@ -128,12 +128,26 @@ jobs:
             rc=$?
             if [ $rc -ne 0 ]; then
               echo "===== сборка упала, ищу пакет ====="
-              grep -E "ERROR: .* failed to build|make: \*\*\*" "$GITHUB_WORKSPACE/build.log" | tail -10
+              # ловим и вложенные make: падение образа/установки идёт из make[1]/make[2],
+              # а не только из верхнего make — шаблон "make: ***" их пропускал
+              grep -E "ERROR: .* failed to build|make(\[[0-9]+\])?: \*\*\*" "$GITHUB_WORKSPACE/build.log" | tail -20
               pkg=$(grep -oE "ERROR: [^ ]+ failed to build" "$GITHUB_WORKSPACE/build.log" | head -1 | awk '{print $2}')
               if [ -n "$pkg" ]; then
                 echo "===== повторная сборка $pkg с V=s ====="
                 make -j1 "$pkg/compile" V=s 2>&1 | tail -150
+              else
+                # пакет не назван — значит упало на установке пакетов или сборке образа;
+                # без хвоста лога причину не восстановить (так потерялся прогон 45062377171)
+                echo "===== ошибки в build.log ====="
+                grep -nE "Error [0-9]+|error:|ERROR:|No space left|Killed|command not found" \
+                  "$GITHUB_WORKSPACE/build.log" | tail -40
+                echo "===== последние 120 строк build.log ====="
+                tail -n 120 "$GITHUB_WORKSPACE/build.log"
               fi
+              echo "===== диск и память ====="
+              df -h / | tail -1
+              free -m || true
+              dmesg 2>/dev/null | grep -iE "out of memory|killed process" | tail -5 || true
             fi
             exit $rc
           fi
@@ -141,6 +155,8 @@ jobs:
       - name: Show failing logs
         if: failure()
         run: |
+          echo "===== хвост build.log ====="
+          tail -n 80 "$GITHUB_WORKSPACE/build.log" 2>/dev/null || echo "build.log нет"
           cd "$OPENWRT_DIR" || exit 0
           found=0
           for f in $(grep -rlE "Error [0-9]|error:" logs/ 2>/dev/null | head -5); do
@@ -171,6 +187,7 @@ jobs:
         with:
           name: build-logs-${{ github.run_id }}
           path: |
+            build.log
             ${{ env.OPENWRT_DIR }}/logs/
           if-no-files-found: ignore
           retention-days: 7

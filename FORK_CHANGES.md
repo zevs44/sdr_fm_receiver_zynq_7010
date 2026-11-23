@@ -61,6 +61,7 @@ gh repo sync zevs44/sdr_fm_receiver_zynq_7010 --branch main
 | 14 | 2026-11-22 | пакеты | `csdr`: `PKG_VERSION` `2019-02-27` → `2019.02.27`, исходная дата вынесена в `PKG_SOURCE_DATE` | apk в OpenWrt 25.12 отвергает версии с несколькими дефисами: «package version is invalid». Проверены все 19 пакетов — несовместим был только этот | `packages/csdr/Makefile` | сделано |
 | 15 | 2026-11-22 | пакеты | `kmod-zynq-fm-radio`: `no_llseek` заменён макросом `ZYNQ_FM_NO_LLSEEK` (в ядре 6.0 `no_llseek` удалён, используется `noop_llseek`) | пакет не собирался на ядре 6.12: `'no_llseek' undeclared` | `packages/kmod-zynq-fm-radio/src/zynq_fm_radio.c` | сделано |
 | 16 | 2026-11-22 | конфигурация | Включены kmod для nftables: `kmod-nft-core`, `-queue`, `-nat`, `-compat`, `kmod-nf-conntrack`, плюс `nftables-json` и `ca-bundle` | `b4` ставится в рантайме официальным скриптом, но требует эти модули; с официальных фидов они не встанут из-за версии ядра. `kmod-nft-conntrack` в 25.12 нет — conntrack даёт `kmod-nf-conntrack` | `configs/zynq_antminer_s9.config` | сделано |
+| 17 | 2026-11-23 | CI | Диагностика падений: `build.log` выкладывается артефактом и печатается в лог шага; ловятся вложенные `make[1]/make[2]: ***`, ошибки образа и установки, `No space left`, OOM; выводятся диск и память | прогон `45062377171` упал без единой улики: весь вывод `make world` уходил в `build.log`, который не сохранялся, а `grep "make: \*\*\*"` не видел вложенных make. Причину восстановить было нельзя | `.github/workflows/build.yml` | сделано |
 
 ## Планируемые изменения
 
