@@ -251,13 +251,24 @@ jobs:
               echo "===== повторная сборка ${failed[0]} с V=s ====="
               make -j1 "${failed[0]}/compile" V=s 2>&1 | tail -150
             else
-              # пакет не назван: падение на установке пакетов или сборке образа.
-              # Без хвоста лога причину не восстановить (так потерялся прогон 45062377171).
+              # verbose.mk в обычном режиме отправляет stderr вложенных make
+              # в /dev/null и оставляет только «build failed» — реальной ошибки
+              # в build.log нет вовсе. Поэтому повторяем именно упавшую цель
+              # (из последней строки « make[N] <цель>») с V=s.
               echo "===== пакет не назван: ошибки в build.log ====="
               grep -nE "Error [0-9]+|error:|ERROR:|No space left|Killed|command not found" \
                 "$GITHUB_WORKSPACE/build.log" | tail -40
-              echo "===== последние 120 строк build.log ====="
-              tail -n 120 "$GITHUB_WORKSPACE/build.log"
+              echo "===== последние 60 строк build.log ====="
+              tail -n 60 "$GITHUB_WORKSPACE/build.log"
+
+              failed_target="$(grep -oE '^ make\[[0-9]+\] [^ ]+' "$GITHUB_WORKSPACE/build.log" \
+                               | tail -1 | awk '{print $2}')"
+              if [ -n "$failed_target" ]; then
+                echo "===== повтор $failed_target с V=s ====="
+                make -j1 "$failed_target" V=s 2>&1 | tail -200
+              else
+                echo "цель определить не удалось — полный build.log в артефакте"
+              fi
             fi
 
             echo "===== диск и память ====="
@@ -274,6 +285,9 @@ jobs:
 
       - name: Collect build info
         if: always()
+        env:
+          # без этого `ccache -s` читает ~/.ccache и всегда показывает ноль
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
           {
             echo "commit          : $(git rev-parse HEAD)"
@@ -298,6 +312,18 @@ jobs:
             free -m || true
           } > "$GITHUB_WORKSPACE/build-info.txt"
           cat "$GITHUB_WORKSPACE/build-info.txt"
+
+      # actions/cache сохраняет кэш только при успешном прогоне (post-if: success()),
+      # а мы отлаживаем именно падения: без этого шага каждая повторная сборка
+      # начинается с нуля. Ключ уникален для прогона, restore-keys в шаге
+      # «Restore ccache» находит самый свежий по префиксу.
+      - name: Save ccache
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ steps.tag.outputs.value }}-${{ github.run_id }}
 
       - name: Show failing logs
         if: failure()
