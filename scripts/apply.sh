@@ -31,6 +31,11 @@ if [ ! -d "$OWRT" ]; then
   exit 1
 fi
 
+# Дальше скрипт делает `cd "$OWRT"`; относительный путь вроде ./openwrt после
+# этого удвоился бы (./openwrt/openwrt/...). В CI аргумент именно относительный,
+# поэтому приводим его к абсолютному один раз здесь.
+OWRT="$(cd "$OWRT" && pwd)"
+
 echo "== 1. патчи =="
 shopt -s nullglob
 patches=("$HERE"/target-patches/*.patch)
