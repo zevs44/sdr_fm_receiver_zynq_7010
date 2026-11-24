@@ -314,9 +314,9 @@ jobs:
             # «build failed». Вывод пишем в retry.log: он уходит в артефакт,
             # и ошибку видно, даже если она не попала в tail.
             retry_target() {
-              local tgt="$1" log="$GITHUB_WORKSPACE/retry.log"
-              echo "===== повтор $tgt с V=s ====="
-              make -j1 "$tgt" V=s > "$log" 2>&1
+              local log="$GITHUB_WORKSPACE/retry.log"
+              echo "===== повтор $* с V=s ====="
+              make -j1 "$@" V=s > "$log" 2>&1
               echo "код возврата повтора: $?"
               echo "===== ошибки в повторе ====="
               grep -nE "Error [0-9]+|error:|ERROR:|No rule|No space left|Killed|command not found|Permission denied|missing" "$log" | tail -60
@@ -331,11 +331,12 @@ jobs:
               printf '  - %s\n' "${failed[@]}"
               case "${failed[0]}" in
                 target/*)
-                  # target/linux падает не в compile, а в install (сборка
-                  # образа): compile к этому моменту уже прошёл, и повтор
-                  # /compile не показывает ничего. target/install тянет
-                  # compile за собой, поэтому покрывает обе стадии.
-                  retry_target target/install
+                  # target/linux может упасть и в compile, и в install (сборка
+                  # образа). target/install тянет compile за собой, а
+                  # package/install создаёт rootfs-каталог, без которого
+                  # mksquashfs падает с «Cannot stat root-zynq». Поэтому
+                  # повторяем обе стадии в правильном порядке.
+                  retry_target package/install target/install
                   ;;
                 *)
                   retry_target "${failed[0]}/compile"
