@@ -1,0 +1,15 @@
+diff --git a/target/linux/zynq/config-6.12 b/target/linux/zynq/config-6.12
+index 2afc561..4d13694 100644
+--- a/target/linux/zynq/config-6.12
++++ b/target/linux/zynq/config-6.12
+@@ -556,3 +556,10 @@ CONFIG_ZBOOT_ROM_BSS=0x0
+ CONFIG_ZBOOT_ROM_TEXT=0x0
+ CONFIG_ZLIB_DEFLATE=y
+ CONFIG_ZLIB_INFLATE=y
++# Звук: ALSA SoC, AXI-I2S и simple-audio-card (узлы PL в DTS)
++CONFIG_SND=y
++CONFIG_SND_SOC=y
++CONFIG_SND_SOC_ADI=y
++CONFIG_SND_SOC_ADI_AXI_I2S=y
++CONFIG_SND_SIMPLE_CARD=y
++CONFIG_SND_SOC_SPDIF=y
