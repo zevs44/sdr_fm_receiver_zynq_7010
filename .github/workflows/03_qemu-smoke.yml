@@ -1,4 +1,4 @@
-name: 04 qemu smoke
+name: 03 qemu smoke
 
 # Загружает уже собранный образ в QEMU (xilinx-zynq-a9) и проверяет, что
 # ядро стартует на DTB платы, монтирует squashfs-корень и доходит до init.

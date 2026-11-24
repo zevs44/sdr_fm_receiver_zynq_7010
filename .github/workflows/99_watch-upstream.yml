@@ -1,4 +1,4 @@
-name: 02 watch upstream
+name: 99 watch upstream
 
 # Раз в 6 часов проверяет, не вышел ли новый стабильный релиз OpenWrt.
 # Если вышел — обновляет .openwrt-version и запускает сборку.

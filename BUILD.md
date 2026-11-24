@@ -97,31 +97,32 @@ Workflow `.github/workflows/01_build.yml` запускается:
 пакете, а доводит проход и печатает **все** сломанные пакеты. Это экономит
 полный прогон (~1,5 ч) на каждый следующий дефект.
 
-`.github/workflows/02_watch-upstream.yml` раз в 6 часов проверяет новые стабильные релизы
+`.github/workflows/99_watch-upstream.yml` раз в 6 часов проверяет новые стабильные релизы
 OpenWrt: если тег новее, чем в `.openwrt-version`, **сначала проверяет, что патч-слой на него
 ложится** (клон тега + `git apply --check` каждого патча), и только потом обновляет файл и
 запускает сборку. Если патч не ложится — версия не закрепляется, workflow падает с сообщением:
 `.openwrt-version` не укажет на сломанную версию.
 
-`.github/workflows/03_cleanup-runs.yml` раз в сутки удаляет старые **успешные** прогоны
-(по умолчанию — `02_watch-upstream.yml`, старше 10 дней), чтобы история Actions не росла
+`.github/workflows/02_cleanup-runs.yml` раз в сутки удаляет старые **успешные** прогоны
+(по умолчанию — `99_watch-upstream.yml`, старше 10 дней), чтобы история Actions не росла
 бесконечно. Неуспешные прогоны не удаляются никогда: это история отладки. Параметры
 (`workflow`, `older_than_days`, `dry_run`) задаются при ручном запуске; `workflow: all`
 чистит все workflow репозитория, включая собственные прошлые прогоны чистки (текущий
 прогон не удаляется никогда). GitHub считает workflow по пути файла, поэтому прогоны,
-созданные до переименования (`build.yml`, `watch-upstream.yml`), к новым файлам не относятся
+созданные до переименований (`build.yml`, `watch-upstream.yml`, а также `02_watch-upstream.yml`,
+`03_cleanup-runs.yml`, `04_qemu-smoke.yml`), к новым файлам не относятся
 и под фильтр по имени файла не попадают — разово их можно удалить с `workflow: all`.
 
-`.github/workflows/04_qemu-smoke.yml` — загрузка уже собранного образа в QEMU
+`.github/workflows/03_qemu-smoke.yml` — загрузка уже собранного образа в QEMU
 (`xilinx-zynq-a9`), без пересборки. Подробности — ниже.
 
 ### Проверка в QEMU
 
 ```bash
 # образ из последнего успешного прогона «01 build image»
-gh workflow run 04_qemu-smoke.yml
+gh workflow run 03_qemu-smoke.yml
 # или конкретный прогон
-gh workflow run 04_qemu-smoke.yml -f run_id=<run_id> -f timeout_seconds=180
+gh workflow run 03_qemu-smoke.yml -f run_id=<run_id> -f timeout_seconds=180
 ```
 
 Что делает `scripts/qemu_smoke.sh`: распаковывает образ, дополняет его до 256 Мб
@@ -226,9 +227,9 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 | Префикс артефакта | `01_build.yml` → `env.ARTIFACT_PREFIX` | `sdcard` | косметика |
 | Таймаут сборки | `01_build.yml` → `timeout-minutes` | `330` | если сборка стала дольше |
 | Параллельность make | `01_build.yml` → `env.DEFAULT_JOBS` | `4` (не больше `nproc`) | при OOM — снижать; при большом раннере — поднимать |
-| Репозиторий для слежения | `02_watch-upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
-| Файл версии | `02_watch-upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
-| Фильтр стабильных тегов | `02_watch-upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
+| Репозиторий для слежения | `99_watch-upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
+| Файл версии | `99_watch-upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
+| Фильтр стабильных тегов | `99_watch-upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
 | Цель и устройство | `configs/zynq_antminer_s9.config` | `CONFIG_TARGET_zynq*`, `..._DEVICE_bitmain_zynq-antminer-s9` | при смене платы |
 
 Порядок перехода:
