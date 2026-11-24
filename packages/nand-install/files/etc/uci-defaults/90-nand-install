@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Добавляет в LuCI две команды установки в NAND (через luci-app-commands).
+# Выполняется один раз при первой загрузке; повторный запуск ничего не меняет.
+#
+# Команды хранятся в /etc/config/luci как `config command` — так их читает
+# luci-app-commands. Установка требует свежей метки пробного запуска
+# (10 минут), поэтому порядок «dry-run, затем установка» обязателен.
+
+[ -x /sbin/nand_install ] || exit 0
+
+if uci -q show luci 2>/dev/null | grep -qF "NAND: dry-run"; then
+	exit 0
+fi
+
+uci -q add luci command >/dev/null 2>&1 || exit 0
+uci -q set luci.@command[-1].name='NAND: dry-run (без записи)'
+uci -q set luci.@command[-1].command='/sbin/nand_install --dry-run'
+
+uci -q add luci command >/dev/null 2>&1 || exit 0
+uci -q set luci.@command[-1].name='NAND: установка (после dry-run)'
+uci -q set luci.@command[-1].command='/sbin/nand_install --yes'
+
+uci -q commit luci
+exit 0

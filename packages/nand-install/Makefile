@@ -29,6 +29,8 @@ endef
 define Package/nand-install/install
 	$(INSTALL_DIR) $(1)/sbin
 	$(INSTALL_BIN) ./files/nand_install $(1)/sbin/nand_install
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/etc/uci-defaults/90-nand-install $(1)/etc/uci-defaults/90-nand-install
 endef
 
 $(eval $(call BuildPackage,nand-install))
