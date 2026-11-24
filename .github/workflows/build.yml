@@ -243,13 +243,38 @@ jobs:
             echo "===== сборка упала, ищу пакет ====="
             grep -E "ERROR: .* failed to build|make(\[[0-9]+\])?: \*\*\*" "$GITHUB_WORKSPACE/build.log" | tail -40
 
+            # Повтор упавшей цели с V=s: verbose.mk в обычном режиме глушит
+            # вывод вложенных make, поэтому без повтора в логе только
+            # «build failed». Вывод пишем в retry.log: он уходит в артефакт,
+            # и ошибку видно, даже если она не попала в tail.
+            retry_target() {
+              local tgt="$1" log="$GITHUB_WORKSPACE/retry.log"
+              echo "===== повтор $tgt с V=s ====="
+              make -j1 "$tgt" V=s > "$log" 2>&1
+              echo "код возврата повтора: $?"
+              echo "===== ошибки в повторе ====="
+              grep -nE "Error [0-9]+|error:|ERROR:|No rule|No space left|Killed|command not found|Permission denied|missing" "$log" | tail -60
+              echo "===== последние 200 строк повтора ====="
+              tail -n 200 "$log"
+            }
+
             mapfile -t failed < <(grep -oE "ERROR: [^ ]+ failed to build" "$GITHUB_WORKSPACE/build.log" \
                                   | awk '{print $2}' | sort -u)
             if [ "${#failed[@]}" -gt 0 ]; then
-              echo "===== сломанных пакетов: ${#failed[@]} ====="
+              echo "===== сломанных целей: ${#failed[@]} ====="
               printf '  - %s\n' "${failed[@]}"
-              echo "===== повторная сборка ${failed[0]} с V=s ====="
-              make -j1 "${failed[0]}/compile" V=s 2>&1 | tail -150
+              case "${failed[0]}" in
+                target/*)
+                  # target/linux падает не в compile, а в install (сборка
+                  # образа): compile к этому моменту уже прошёл, и повтор
+                  # /compile не показывает ничего. target/install тянет
+                  # compile за собой, поэтому покрывает обе стадии.
+                  retry_target target/install
+                  ;;
+                *)
+                  retry_target "${failed[0]}/compile"
+                  ;;
+              esac
             else
               # verbose.mk в обычном режиме отправляет stderr вложенных make
               # в /dev/null и оставляет только «build failed» — реальной ошибки
@@ -261,11 +286,11 @@ jobs:
               echo "===== последние 60 строк build.log ====="
               tail -n 60 "$GITHUB_WORKSPACE/build.log"
 
+              # «-C» — это не цель, а флаг make; такие строки отбрасываем.
               failed_target="$(grep -oE '^ make\[[0-9]+\] [^ ]+' "$GITHUB_WORKSPACE/build.log" \
-                               | tail -1 | awk '{print $2}')"
+                               | awk '$2 != "-C" {print $2}' | tail -1)"
               if [ -n "$failed_target" ]; then
-                echo "===== повтор $failed_target с V=s ====="
-                make -j1 "$failed_target" V=s 2>&1 | tail -200
+                retry_target "$failed_target"
               else
                 echo "цель определить не удалось — полный build.log в артефакте"
               fi
@@ -365,6 +390,7 @@ jobs:
           name: build-logs-${{ github.run_id }}
           path: |
             build.log
+            retry.log
             build-info.txt
             patch-status.txt
             ${{ env.OPENWRT_DIR }}/.config
