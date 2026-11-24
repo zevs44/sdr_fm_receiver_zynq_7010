@@ -1,0 +1,188 @@
+#!/bin/sh
+#
+# nand_install — записать OpenWrt с SD-карты во внутреннюю NAND платы.
+#
+# Запускается на работающей системе, загруженной с SD-карты. Порядок проверок
+# и защит — по шаблону antminer-l3-openwrt (docs/14-NAND-Install-Pattern.md):
+# проверки -> dry-run с меткой -> подтверждение -> flock -> запись -> проверка
+# чтением. Корневая ФС копируется из /rom (read-only squashfs), а не из
+# работающей системы: так исключаются временные файлы и сама SD-карта.
+#
+# Использование: nand_install [--full|--system] [--dry-run] [--yes] [--force]
+
+set -eu
+
+# --- Параметры платы ---------------------------------------------------------
+SD_DEV=/dev/mmcblk0p1
+MNT=/mnt/sdcard
+PARTS="boot uboot fpga uboot_env kernel rootfs"
+
+# md5 первых байт файлов: BusyBox умеет md5sum, но не od
+MD5_FSBL=cd91ce4084b5a93c1399a772c9774a99     # fe ff ff ea — начало FSBL
+MD5_UIMAGE=5f17afccbf287522dacddc0d09e4e03f   # 27 05 19 56 — uImage
+MD5_FIT=51ac24e042ded1e5a13eed50d144d16b      # d0 0d fe ed — FIT
+MD5_GZIP=5b25786f919872ca265a821a845567c0     # 1f 8b — gzip
+# -----------------------------------------------------------------------------
+
+LOG=/tmp/nand_install.log
+STAMP=/tmp/nand_install.ok
+LOCK=/tmp/nand_install.lock
+STAMP_TTL=600
+
+MODE=full
+DRY_RUN=0
+YES=0
+FORCE=0
+
+log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOG"; }
+die() { printf 'ОШИБКА: %s\n' "$*" | tee -a "$LOG" >&2; exit 1; }
+
+usage() {
+	cat <<EOF
+Использование: nand_install [--full|--system] [--dry-run] [--yes] [--force]
+
+  --full      записать всё: система + загрузчик (по умолчанию)
+  --system    только корневую ФС в UBI, загрузчик не трогать
+  --dry-run   проверить и показать план, не записывая
+  --yes       не спрашивать подтверждение
+  --force     пропустить проверку метки dry-run
+  -h, --help  эта справка
+EOF
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--full)    MODE=full ;;
+		--system)  MODE=system ;;
+		--dry-run) DRY_RUN=1 ;;
+		--yes)     YES=1 ;;
+		--force)   FORCE=1 ;;
+		-h|--help) usage; exit 0 ;;
+		*) echo "Неизвестный аргумент: $1" >&2; usage; exit 2 ;;
+	esac
+	shift
+done
+
+[ "$(id -u)" -eq 0 ] || die "нужны права root"
+
+# --- 1. Проверка источника загрузки ------------------------------------------
+case "$(cat /proc/cmdline)" in
+	*root=ubi*) die "система загружена из NAND — запись повредит её; загрузитесь с SD" ;;
+esac
+
+# --- 2. Разделы NAND ---------------------------------------------------------
+mtd_idx() {
+	awk -v n="$1" '$4 == "\"" n "\"" { sub(":", "", $1); sub("mtd", "", $1); print $1 }' /proc/mtd
+}
+mtd_size() {
+	awk -v n="$1" '$4 == "\"" n "\"" { print $2 }' /proc/mtd
+}
+for p in $PARTS; do
+	[ -n "$(mtd_idx "$p")" ] || die "в /proc/mtd нет раздела $p"
+done
+
+# --- 3. SD-карта -------------------------------------------------------------
+mkdir -p "$MNT"
+mountpoint -q "$MNT" || mount -t vfat -o ro "$SD_DEV" "$MNT" || die "не смонтировать $SD_DEV"
+
+# --- 4. Файлы, сигнатуры и размеры -------------------------------------------
+sig() { dd if="$MNT/$1" bs=1 count="$2" 2>/dev/null | md5sum | cut -d' ' -f1; }
+check_sig() {
+	[ "$(sig "$1" "$2")" = "$3" ] || die "файл $1 не похож на ожидаемый ($4)"
+}
+file_size() { wc -c < "$MNT/$1"; }
+part_size() { printf '%d' "$((0x$(mtd_size "$1")))"; }
+
+for f in boot.bin u-boot.img uboot_env.bin system.bit.gz fit.itb; do
+	[ -f "$MNT/$f" ] || die "нет файла $f на SD-карте"
+done
+
+if [ "$MODE" = full ]; then
+	check_sig boot.bin 4 "$MD5_FSBL" "начало FSBL"
+	check_sig u-boot.img 4 "$MD5_UIMAGE" "заголовок uImage"
+	check_sig system.bit.gz 2 "$MD5_GZIP" "gzip"
+	check_sig fit.itb 4 "$MD5_FIT" "FIT"
+	check_size() {
+		[ "$(file_size "$1")" -le "$(part_size "$2")" ] ||
+			die "$1 ($(file_size "$1") Б) больше раздела $2 ($(part_size "$2") Б)"
+	}
+	check_size boot.bin boot
+	check_size u-boot.img uboot
+	check_size uboot_env.bin uboot_env
+	check_size system.bit.gz fpga
+	check_size fit.itb kernel
+fi
+
+rom_size="$(du -sk /rom | awk '{ print $1 * 1024 }')"
+rootfs_size="$(part_size rootfs)"
+[ "$rom_size" -le "$rootfs_size" ] ||
+	die "система ($rom_size Б) не помещается в раздел rootfs ($rootfs_size Б)"
+
+log "режим=$MODE dry-run=$DRY_RUN"
+log "разделы: $(for p in $PARTS; do printf '%s=mtd%s ' "$p" "$(mtd_idx "$p")"; done)"
+log "rootfs: /rom $rom_size Б, раздел $rootfs_size Б"
+
+# --- 5. Пробный запуск -------------------------------------------------------
+if [ "$DRY_RUN" = 1 ]; then
+	printf '%s|%s|%s\n' "$MODE" "$(date +%s)" "$rom_size" > "$STAMP"
+	log "план проверен, метка создана; запись не выполнялась"
+	umount "$MNT" 2>/dev/null || true
+	exit 0
+fi
+
+# --- 6. Метка dry-run --------------------------------------------------------
+if [ "$FORCE" != 1 ]; then
+	[ -f "$STAMP" ] || die "сначала запустите --dry-run"
+	IFS='|' read -r s_mode s_time s_rom < "$STAMP"
+	[ "$s_mode" = "$MODE" ] || die "метка от другого режима"
+	[ "$s_rom" = "$rom_size" ] || die "метка от другого состояния /rom"
+	[ $(( $(date +%s) - s_time )) -le "$STAMP_TTL" ] ||
+		die "метка устарела (${STAMP_TTL} с), повторите --dry-run"
+fi
+
+# --- 7. Подтверждение --------------------------------------------------------
+if [ "$YES" != 1 ]; then
+	printf 'Введите INSTALL для подтверждения: '
+	read -r ans
+	[ "$ans" = "INSTALL" ] || die "отменено"
+fi
+
+# --- 8. Блокировка -----------------------------------------------------------
+exec 9>"$LOCK"
+flock -n 9 || die "другой nand_install уже выполняется"
+
+# --- 9. Запись корневой ФС (первый этап) -------------------------------------
+rootfs_mtd="$(mtd_idx rootfs)"
+log "запись корневой ФС в UBI (mtd$rootfs_mtd)"
+ubiformat "/dev/mtd$rootfs_mtd" -y || die "ubiformat"
+ubiattach -m "$rootfs_mtd" -d 0 || die "ubiattach"
+ubimkvol /dev/ubi0 -N rootfs -m || die "ubimkvol"
+mkdir -p /mnt/ubi
+mount -t ubifs ubi0:rootfs /mnt/ubi || die "не смонтировать новый UBI-том"
+cp -a /rom/. /mnt/ubi/ || die "копирование /rom"
+sync
+umount /mnt/ubi
+ubidetach -m "$rootfs_mtd"
+log "корневая ФС записана"
+
+# --- 10. Загрузчик и ядро (второй этап) --------------------------------------
+if [ "$MODE" = full ]; then
+	log "запись загрузчика, битстрима и ядра"
+	mtd write "$MNT/boot.bin" boot || die "mtd write boot"
+	mtd write "$MNT/u-boot.img" uboot || die "mtd write uboot"
+	mtd write "$MNT/uboot_env.bin" uboot_env || die "mtd write uboot_env"
+	mtd write "$MNT/system.bit.gz" fpga || die "mtd write fpga"
+	mtd write "$MNT/fit.itb" kernel || die "mtd write kernel"
+	sync
+
+	log "проверка чтением"
+	mtd verify "$MNT/boot.bin" boot || die "verify boot"
+	mtd verify "$MNT/u-boot.img" uboot || die "verify uboot"
+	mtd verify "$MNT/uboot_env.bin" uboot_env || die "verify uboot_env"
+	mtd verify "$MNT/system.bit.gz" fpga || die "verify fpga"
+	mtd verify "$MNT/fit.itb" kernel || die "verify kernel"
+	log "загрузчик записан и проверен"
+fi
+
+umount "$MNT" 2>/dev/null || true
+log "готово: выключите питание и выньте SD-карту"

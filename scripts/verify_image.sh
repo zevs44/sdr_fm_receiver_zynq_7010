@@ -178,6 +178,24 @@ if [ -n "$fat_off" ]; then
     else
       bad "fit.itb без строки antminer — возможно, чужое дерево устройства"
     fi
+
+    # узлы PL в DTB: без них драйвер радио и ALSA-карта не появятся
+    if command -v dumpimage >/dev/null 2>&1 && command -v dtc >/dev/null 2>&1; then
+      if dumpimage -T flat_dt -p 1 -o "$TMP/board.dtb" "$TMP/fit.itb" >/dev/null 2>&1 &&
+         dtc -I dtb -O dts "$TMP/board.dtb" > "$TMP/board.dts" 2>/dev/null; then
+        for node in "fm-radio@43c60000" "axi_i2s_adi@43c00000" "audio_clock" "sound"; do
+          if grep -q "$node" "$TMP/board.dts"; then
+            ok "DTB: узел $node"
+          else
+            bad "DTB: нет узла $node (нет /dev/radio0 и ALSA-карты)"
+          fi
+        done
+      else
+        bad "DTB: не удалось извлечь или разобрать DTB из fit.itb"
+      fi
+    else
+      skipped "DTB: нет dumpimage или dtc"
+    fi
   else
     bad "fit.itb не извлекается из FAT"
   fi
@@ -197,6 +215,7 @@ if [ -n "$rootfs_off" ]; then
       check_in_rootfs "usr/bin/fm_radio"
       check_in_rootfs "usr/bin/csdr"
       check_in_rootfs "usr/bin/mympd"
+      check_in_rootfs "sbin/nand_install"
       check_in_rootfs "usr/libexec/rpcd/fmradio"
       check_in_rootfs "etc/init.d/fmradio"
       if grep -qE "/lib/modules/[^/]+/zynq_fm_radio\.ko$" "$TMP/rootfs.list"; then

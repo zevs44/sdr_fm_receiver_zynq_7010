@@ -1,0 +1,102 @@
+diff --git a/target/linux/zynq/patches/0003-dts-antminer-s9-pl.patch b/target/linux/zynq/patches/0003-dts-antminer-s9-pl.patch
+new file mode 100644
+index 0000000..8e48098
+--- /dev/null
++++ b/target/linux/zynq/patches/0003-dts-antminer-s9-pl.patch
+@@ -0,0 +1,96 @@
++diff --git a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
++index 8449f90..cba1a3d 100644
++--- a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
+++++ b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
++@@ -88,3 +88,91 @@
++ 	dr_mode = "host";
++ 	usb-phy = <&usb_phy0>;
++ };
+++
+++/*
+++ * Радиотракт и звук в ПЛИС (добавлено нашим патчем).
+++ * Адреса сверены с design_1.bd: axi_i2s_adi 0x43C00000, axi_sdr_fm 0x43C60000.
+++ * Тактирование задано fixed-clock: axi 50 МГц, ref 12.288 МГц (48 кГц × 256).
+++ */
+++/ {
+++	audio_clock: audio_clock {
+++		compatible = "fixed-clock";
+++		#clock-cells = <0>;
+++		clock-frequency = <12288000>;
+++	};
+++
+++	s_axi_aclk: s_axi_aclk {
+++		compatible = "fixed-clock";
+++		#clock-cells = <0>;
+++		clock-frequency = <50000000>;
+++	};
+++
+++	axi_i2s_adi: axi_i2s_adi@43c00000 {
+++		compatible = "adi,axi-i2s-1.00.a";
+++		reg = <0x43c00000 0x10000>;
+++		clock-names = "axi", "ref";
+++		clocks = <&s_axi_aclk>, <&audio_clock>;
+++		xlnx,bclk-pol = <0>;
+++		xlnx,dma-type = <1>;
+++		xlnx,has-rx = <1>;
+++		xlnx,has-tx = <1>;
+++		xlnx,lrclk-pol = <0>;
+++		xlnx,num-ch = <1>;
+++		xlnx,s00-axi-addr-width = <0x10>;
+++		xlnx,s00-axi-data-width = <0x20>;
+++		xlnx,slot-width = <0x18>;
+++		dmas = <&dmac_s 0>, <&dmac_s 1>;
+++		dma-names = "tx", "rx";
+++		#sound-dai-cells = <0>;
+++		status = "okay";
+++	};
+++
+++	fm_radio: fm-radio@43c60000 {
+++		compatible = "xlnx,zynq-fm-radio-1.0";
+++		reg = <0x43c60000 0x1000>;
+++		status = "okay";
+++	};
+++
+++	playback_codec: playback-codec {
+++		compatible = "linux,spdif-dit";
+++		#sound-dai-cells = <0>;
+++	};
+++
+++	capture_codec: capture-codec {
+++		compatible = "linux,spdif-dir";
+++		#sound-dai-cells = <0>;
+++	};
+++
+++	sound {
+++		compatible = "simple-audio-card";
+++		#address-cells = <1>;
+++		#size-cells = <0>;
+++		simple-audio-card,name = "audio";
+++		simple-audio-card,widgets = "Line", "Line Out Jack";
+++		simple-audio-card,routing = "Line Out Jack", "spdif-out";
+++		simple-audio-card,format = "i2s";
+++		simple-audio-card,mclk-fs = <256>;
+++
+++		simple-audio-card,dai-link@0 {
+++			reg = <0>;
+++			format = "i2s";
+++			cpu {
+++				sound-dai = <&axi_i2s_adi>;
+++			};
+++			codec {
+++				sound-dai = <&playback_codec>;
+++			};
+++		};
+++
+++		simple-audio-card,dai-link@1 {
+++			reg = <1>;
+++			format = "i2s";
+++			cpu {
+++				sound-dai = <&axi_i2s_adi>;
+++			};
+++			codec {
+++				sound-dai = <&capture_codec>;
+++			};
+++		};
+++	};
+++};

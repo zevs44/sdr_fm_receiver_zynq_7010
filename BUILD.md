@@ -137,7 +137,7 @@ PASS — появился init (`procd: - init complete -`), FAIL — kernel pan
 | `scripts/expected-artifacts.sha256` + магия битстрима | шаг «Verify input artifacts» | битый коммит, порча переводов строк, подмена двоичного файла |
 | ожидаемые файлы в диффе | шаг «Audit patch layer» | патч лёг частично или не лёг вовсе |
 | `scripts/check_config.sh` | шаг «Verify config» | `defconfig` молча выбросил пакет или поменял значение |
-| `scripts/verify_image.sh` | шаг «Verify image» | образ без битстрима, без kmod, с чужим деревом устройства |
+| `scripts/verify_image.sh` | шаг «Verify image» | образ без битстрима, без kmod, с чужим деревом устройства, без узлов PL в DTB, без `/sbin/nand_install` |
 | `scripts/qemu_smoke.sh` | workflow `04 qemu smoke` | ядро не стартует на DTB, корень не монтируется, init не доходит |
 
 Проверки запускаются и локально:
