@@ -68,16 +68,16 @@ The list below is exhaustive for `sdr_recv.xdc`.
 
 | Signal | FPGA pin | Connector | Direction | Notes |
 |---|---|---|---|---|
-| `lvds_p_0` | V15 | J5 pin 15 | in | antenna +, LVDS_25 |
-| `lvds_n_0` | W15 | J5 pin 11 | in | antenna −, LVDS_25 |
+| `lvds_p_0` | V15 | J5 pin 11 | in | antenna +, LVDS_25 |
+| `lvds_n_0` | W15 | J5 pin 12 | in | antenna −, LVDS_25 |
 | `ch2_i2s_bclk_0` | T17 | J9 pin 15 | in | external I2S bit clock |
 | `ch2_i2s_lrclk_0` | R18 | J9 pin 11 | in | external I2S word clock |
 | `ch2_i2s_sdata_0` | R17 | J9 pin 5 | in | external I2S data |
-| `dac_out_0[0]` | W13 | J2 pin 11 | out | ΔΣ left |
-| `dac_out_0[1]` | V12 | J2 pin 15 | out | ΔΣ right |
-| `audio_out_l_0` | Y14 | J4 pin 11 | out | FM only, bypasses the mux |
-| `audio_out_r_0` | W14 | J4 pin 15 | out | FM only, bypasses the mux |
-| `antenna_out_0` | T16 | J4 pin 12 | out | FM transmitter |
+| `dac_out_0[0]` | W13 | J2 pin 12 | out | ΔΣ left |
+| `dac_out_0[1]` | V12 | J2 pin 11 | out | ΔΣ right |
+| `audio_out_l_0` | Y14 | J4 pin 12 | out | FM only, bypasses the mux |
+| `audio_out_r_0` | W14 | J4 pin 11 | out | FM only, bypasses the mux |
+| `antenna_out_0` | T16 | J5 pin 5 | out | FM transmitter |
 | `led_stereo_lock_0` | M17 | — | out | status LED |
 | `led_station_found_0` | M19 | — | out | status LED |
 | `led_rds_sync_0` | L19 | — | out | status LED |

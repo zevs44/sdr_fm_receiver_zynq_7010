@@ -115,10 +115,11 @@ if [ -n "$fat_off" ]; then
   FAT="$IMG@@$fat_off"
   export MTOOLS_SKIP_CHECK=1
 
-  # -b: по одному имени в строке, без колонок и дат
-  listing="$(mdir -b -i "$FAT" :: 2>/dev/null || true)"
+  # Проверяем каждый файл напрямую, а не разбором `mdir -b ::`: формат
+  # листинга зависит от версии mtools, и на прогоне 45354756963 grep -x
+  # не совпал ни с одним именем, хотя mtype/mcopy те же файлы читали.
   for f in boot.bin u-boot.img uboot_env.bin uEnv.txt fit.itb system.bit.gz; do
-    if printf '%s\n' "$listing" | grep -qxF "$f"; then
+    if mdir -i "$FAT" "::$f" >/dev/null 2>&1; then
       ok "FAT: $f на месте"
     elif [ "$f" = "system.bit.gz" ] && [ "${ALLOW_MISSING_BITSTREAM:-0}" = "1" ]; then
       skipped "FAT: system.bit.gz отсутствует (разрешено ALLOW_MISSING_BITSTREAM=1), PL будет пуст"
@@ -126,6 +127,7 @@ if [ -n "$fat_off" ]; then
       bad "FAT: нет $f"
     fi
   done
+  echo "   листинг FAT: $(mdir -b -i "$FAT" :: 2>/dev/null | tr '\n' ' ')"
 
   # uEnv.txt: команда загрузки битстрима и ядра
   if mtype -i "$FAT" ::uEnv.txt > "$TMP/uEnv.txt" 2>/dev/null; then
