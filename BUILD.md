@@ -49,14 +49,14 @@ bash scripts/verify_image.sh ./openwrt/bin/targets/zynq/generic   # образ �
 
 ## Сборка в GitHub Actions
 
-Workflow `.github/workflows/build.yml` запускается:
+Workflow `.github/workflows/01_build.yml` запускается:
 
 - вручную (`workflow_dispatch`, можно указать тег OpenWrt, пакет и параллельность);
 - при изменениях в `packages/`, `target-patches/`, `configs/`, `files/`,
-  `bootloader/`, `bitstream/`, `scripts/`, `.github/workflows/build.yml`.
+  `bootloader/`, `bitstream/`, `scripts/`, `.github/workflows/01_build.yml`.
 
 Образ и итоговый `.config` выкладываются артефактом `sdcard-<тег>`.
-`build.log`, `.config`, `build-info.txt`, `patch-status.txt` и `openwrt/logs/`
+`build.log`, `retry.log`, `.config`, `build-info.txt`, `patch-status.txt` и `openwrt/logs/`
 выкладываются артефактом `build-logs-<run_id>` — **всегда**, не только при падении:
 без успешного лога не с чем сравнивать.
 
@@ -64,8 +64,14 @@ Workflow `.github/workflows/build.yml` запускается:
 пакете, а доводит проход и печатает **все** сломанные пакеты. Это экономит
 полный прогон (~1,5 ч) на каждый следующий дефект.
 
-`.github/workflows/watch-upstream.yml` раз в 6 часов проверяет новые стабильные релизы
+`.github/workflows/02_watch-upstream.yml` раз в 6 часов проверяет новые стабильные релизы
 OpenWrt: если тег новее, чем в `.openwrt-version`, обновляет файл и запускает сборку.
+
+`.github/workflows/03_cleanup-runs.yml` раз в сутки удаляет старые **успешные** прогоны
+(по умолчанию — `02_watch-upstream.yml`, старше 10 дней), чтобы история Actions не росла
+бесконечно. Неуспешные прогоны не удаляются никогда: это история отладки. Параметры
+(`workflow`, `older_than_days`, `dry_run`) задаются при ручном запуске; `workflow: all`
+чистит все workflow репозитория.
 
 ### Что проверяется до и после сборки
 
@@ -152,21 +158,21 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 | Что | Где | Сейчас | Когда менять |
 |---|---|---|---|
 | Версия OpenWrt | `.openwrt-version` | `v25.12.6` | при выходе релиза; watcher делает это сам |
-| Репозиторий OpenWrt | `build.yml` → `env.OPENWRT_REPO` | `https://github.com/openwrt/openwrt.git` | при переходе на форк или зеркало |
-| Каталог сборки | `build.yml` → `env.OPENWRT_DIR` | `openwrt` | почти никогда |
-| Цель / подцель | `build.yml` → `env.TARGET` / `env.SUBTARGET` | `zynq` / `generic` | при смене платформы |
-| Префикс артефакта | `build.yml` → `env.ARTIFACT_PREFIX` | `sdcard` | косметика |
-| Таймаут сборки | `build.yml` → `timeout-minutes` | `330` | если сборка стала дольше |
-| Параллельность make | `build.yml` → `env.DEFAULT_JOBS` | `4` (не больше `nproc`) | при OOM — снижать; при большом раннере — поднимать |
-| Репозиторий для слежения | `watch-upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
-| Файл версии | `watch-upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
-| Фильтр стабильных тегов | `watch-upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
+| Репозиторий OpenWrt | `01_build.yml` → `env.OPENWRT_REPO` | `https://github.com/openwrt/openwrt.git` | при переходе на форк или зеркало |
+| Каталог сборки | `01_build.yml` → `env.OPENWRT_DIR` | `openwrt` | почти никогда |
+| Цель / подцель | `01_build.yml` → `env.TARGET` / `env.SUBTARGET` | `zynq` / `generic` | при смене платформы |
+| Префикс артефакта | `01_build.yml` → `env.ARTIFACT_PREFIX` | `sdcard` | косметика |
+| Таймаут сборки | `01_build.yml` → `timeout-minutes` | `330` | если сборка стала дольше |
+| Параллельность make | `01_build.yml` → `env.DEFAULT_JOBS` | `4` (не больше `nproc`) | при OOM — снижать; при большом раннере — поднимать |
+| Репозиторий для слежения | `02_watch-upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
+| Файл версии | `02_watch-upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
+| Фильтр стабильных тегов | `02_watch-upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
 | Цель и устройство | `configs/zynq_antminer_s9.config` | `CONFIG_TARGET_zynq*`, `..._DEVICE_bitmain_zynq-antminer-s9` | при смене платы |
 
 Порядок перехода:
 
 1. Изменить `.openwrt-version` (или дождаться watcher'а).
-2. Запустить сборку вручную: `gh workflow run build.yml`.
+2. Запустить сборку вручную: `gh workflow run 01_build.yml`.
 3. Если патч не лёг — пересобрать его на новой базе, см. `target-patches/README.md`.
 4. Записать изменение в `FORK_CHANGES.md`.
 

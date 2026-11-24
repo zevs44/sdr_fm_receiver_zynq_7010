@@ -1,4 +1,4 @@
-name: watch upstream
+name: 02 watch upstream
 
 # Раз в 6 часов проверяет, не вышел ли новый стабильный релиз OpenWrt.
 # Если вышел — обновляет .openwrt-version и запускает сборку.
@@ -18,7 +18,7 @@ permissions:
 env:
   OPENWRT_REPO: openwrt/openwrt
   VERSION_FILE: .openwrt-version
-  BUILD_WORKFLOW: build.yml
+  BUILD_WORKFLOW: 01_build.yml
   # только стабильные теги вида v25.12.6; rc и -snapshot отбрасываются
   STABLE_TAG_REGEX: '^v[0-9]+\.[0-9]+\.[0-9]+$'
 # ─────────────────────────────────────────────────────────────────────

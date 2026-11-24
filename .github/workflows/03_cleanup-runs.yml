@@ -1,0 +1,132 @@
+name: 03 cleanup runs
+
+# Чистит старые успешные прогоны workflow, чтобы история Actions не росла
+# бесконечно. По умолчанию трогает только «02 watch upstream»: он запускается
+# раз в 6 часов (около 1460 прогонов в год), и почти все прогоны — успешные
+# и пустые, то есть мусор.
+#
+# Правила, которые workflow соблюдает всегда:
+#   - удаляются только прогоны с conclusion = success;
+#   - только завершённые и старше N дней (по умолчанию 10);
+#   - неуспешные прогоны не удаляются никогда — это история отладки.
+#
+# Удаление прогона удаляет и его артефакты.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      workflow:
+        description: "Файл workflow (all = все workflow репозитория)"
+        required: false
+        default: "02_watch-upstream.yml"
+      older_than_days:
+        description: "Удалять успешные прогоны старше N дней"
+        required: false
+        default: "10"
+      dry_run:
+        description: "true = только показать, ничего не удалять"
+        required: false
+        default: "false"
+
+permissions:
+  actions: write   # gh run delete
+  contents: read
+
+concurrency:
+  group: cleanup-runs
+  cancel-in-progress: false
+
+env:
+  # для schedule-запуска inputs пусты — берём значения по умолчанию
+  TARGET_WORKFLOW: ${{ inputs.workflow || '02_watch-upstream.yml' }}
+  OLDER_THAN_DAYS: ${{ inputs.older_than_days || '10' }}
+  DRY_RUN: ${{ inputs.dry_run || 'false' }}
+  # сколько последних прогонов просматривать за один запуск; если история
+  # длиннее, хвост дочистится следующими запусками
+  LIST_LIMIT: "1000"
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate inputs
+        run: |
+          case "$OLDER_THAN_DAYS" in
+            ''|*[!0-9]*)
+              echo "ОШИБКА: older_than_days должен быть целым числом" >&2
+              exit 1
+              ;;
+          esac
+          if [ "$OLDER_THAN_DAYS" -lt 1 ]; then
+            echo "ОШИБКА: older_than_days должен быть не меньше 1" >&2
+            exit 1
+          fi
+          case "$DRY_RUN" in
+            true|false) ;;
+            *)
+              echo "ОШИБКА: dry_run принимает только true или false" >&2
+              exit 1
+              ;;
+          esac
+          echo "workflow    : $TARGET_WORKFLOW"
+          echo "старше дней : $OLDER_THAN_DAYS"
+          echo "dry run     : $DRY_RUN"
+
+      - name: Delete old successful runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          cutoff="$(date -u -d "-${OLDER_THAN_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
+          echo "cutoff: прогоны, созданные раньше $cutoff"
+
+          wf_args=()
+          if [ "$TARGET_WORKFLOW" != "all" ]; then
+            wf_args=(--workflow "$TARGET_WORKFLOW")
+          fi
+
+          # --repo обязателен: у репозитория два remote (origin — наш форк,
+          # upstream — автор), и gh без него может уйти не в тот репозиторий
+          runs="$(gh run list --repo "$GITHUB_REPOSITORY" "${wf_args[@]}" \
+                    --status success --limit "$LIST_LIMIT" \
+                    --json databaseId,conclusion,createdAt,displayTitle)"
+          total="$(jq 'length' <<<"$runs")"
+          echo "успешных прогонов просмотрено: $total (лимит $LIST_LIMIT)"
+
+          # conclusion проверяем ещё раз: --status success уже отфильтровал,
+          # но лишняя проверка дешевле, чем удалённый не тот прогон
+          old="$(jq -r --arg cutoff "$cutoff" '
+                    [.[] | select(.conclusion == "success" and .createdAt < $cutoff)]
+                    | sort_by(.createdAt)
+                    | .[] | [.databaseId, .createdAt, .displayTitle] | @tsv' <<<"$runs")"
+          count="$(printf '%s' "$old" | grep -c . || true)"
+          echo "под удаление: $count"
+
+          deleted=0
+          while IFS=$'\t' read -r id created title; do
+            [ -n "${id:-}" ] || continue
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "DRY-RUN  $id  $created  $title"
+              continue
+            fi
+            gh run delete "$id" --repo "$GITHUB_REPOSITORY"
+            echo "удалён   $id  $created  $title"
+            deleted=$((deleted + 1))
+          done <<<"$old"
+
+          {
+            echo "### Чистка прогонов Actions"
+            echo
+            echo "| Параметр | Значение |"
+            echo "|---|---|"
+            echo "| workflow | \`$TARGET_WORKFLOW\` |"
+            echo "| старше | $OLDER_THAN_DAYS дней (cutoff $cutoff) |"
+            echo "| успешных просмотрено | $total |"
+            echo "| под удаление | $count |"
+            echo "| удалено | $deleted |"
+            echo "| dry run | $DRY_RUN |"
+          } >> "$GITHUB_STEP_SUMMARY"

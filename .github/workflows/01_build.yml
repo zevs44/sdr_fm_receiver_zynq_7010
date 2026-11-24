@@ -1,4 +1,4 @@
-name: build image
+name: 01 build image
 
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ on:
       - "bootloader/**"
       - "bitstream/**"
       - "scripts/**"
-      - ".github/workflows/build.yml"
+      - ".github/workflows/01_build.yml"
 
 concurrency:
   group: build-image
