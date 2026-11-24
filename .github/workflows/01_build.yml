@@ -315,13 +315,15 @@ jobs:
             # и ошибку видно, даже если она не попала в tail.
             retry_target() {
               local log="$GITHUB_WORKSPACE/retry.log"
-              echo "===== повтор $* с V=s ====="
-              make -j1 "$@" V=s > "$log" 2>&1
-              echo "код возврата повтора: $?"
+              echo "===== повтор $* с V=s =====" | tee -a "$log"
+              make -j1 "$@" V=s >> "$log" 2>&1
+              local rc=$?
+              echo "код возврата повтора: $rc" | tee -a "$log"
               echo "===== ошибки в повторе ====="
               grep -nE "Error [0-9]+|error:|ERROR:|No rule|No space left|Killed|command not found|Permission denied|missing" "$log" | tail -60
               echo "===== последние 200 строк повтора ====="
               tail -n 200 "$log"
+              return $rc
             }
 
             mapfile -t failed < <(grep -oE "ERROR: [^ ]+ failed to build" "$GITHUB_WORKSPACE/build.log" \
@@ -331,12 +333,23 @@ jobs:
               printf '  - %s\n' "${failed[@]}"
               case "${failed[0]}" in
                 target/*)
-                  # target/linux может упасть и в compile, и в install (сборка
-                  # образа). target/install тянет compile за собой, а
-                  # package/install создаёт rootfs-каталог, без которого
-                  # mksquashfs падает с «Cannot stat root-zynq». Поэтому
-                  # повторяем обе стадии в правильном порядке.
-                  retry_target package/install target/install
+                  # 1. Диагностика. В world verbose.mk глушит текст ошибки,
+                  #    поэтому сначала повторяем именно фазу компиляции с V=s:
+                  #    если ошибка детерминированная, она будет видна здесь.
+                  if retry_target "${failed[0]}/compile"; then
+                    # 2. Достраиваем установки. После падения на фазе compile
+                    #    стадии tools/install и toolchain/install не выполнялись:
+                    #    в staging_dir/host/bin нет apk, и package/install
+                    #    падает с «apk: No such file or directory».
+                    #    target/install тянет compile за собой, а package/install
+                    #    создаёт rootfs-каталог, без которого mksquashfs падает
+                    #    с «Cannot stat root-zynq». Порядок обязателен.
+                    make -j"$JOBS" tools/install toolchain/install >> "$GITHUB_WORKSPACE/retry.log" 2>&1 || true
+                    ls -l "$OPENWRT_DIR/staging_dir/host/bin/apk" 2>&1 || true
+                    retry_target package/install target/install
+                  else
+                    echo "детерминированная ошибка компиляции — установки пропущены"
+                  fi
                   ;;
                 *)
                   retry_target "${failed[0]}/compile"
