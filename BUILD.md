@@ -12,7 +12,7 @@
 
 | Раздел | Содержимое |
 |---|---|
-| FAT, 16 МБ | `boot.bin`, `u-boot.img`, `uEnv.txt`, `system.bit.gz`, `fit.itb` |
+| FAT, 16 Мб | `boot.bin`, `u-boot.img`, `uEnv.txt`, `system.bit.gz`, `fit.itb` |
 | squashfs + overlay | корневая система OpenWrt с пакетами автора |
 
 Запись на карту — обычным `dd`/balenaEtcher; прошивка платы не требует JTAG.
@@ -20,7 +20,7 @@
 ## Требования
 
 - Linux или WSL2 (сборка OpenWrt на Windows не поддерживается).
-- ~40 ГБ свободного места, 4+ ГБ RAM.
+- ~40 Гб свободного места, 4+ Гб RAM.
 - Пакеты сборки: `build-essential clang flex bison g++ gawk gcc-multilib g++-multilib
   gettext git libncurses-dev libssl-dev python3 python3-setuptools rsync unzip
   zlib1g-dev file libelf-dev wget ca-certificates ccache`.
@@ -91,7 +91,7 @@ gh workflow run 04_qemu-smoke.yml
 gh workflow run 04_qemu-smoke.yml -f run_id=<run_id> -f timeout_seconds=180
 ```
 
-Что делает `scripts/qemu_smoke.sh`: распаковывает образ, дополняет его до 256 МБ
+Что делает `scripts/qemu_smoke.sh`: распаковывает образ, дополняет его до 256 Мб
 (модель SD в QEMU принимает только размер-степень-двойки), достаёт `fit.itb` из FAT,
 вынимает ядро и DTB через `dumpimage`, заворачивает ядро в uImage с адресами `0x8000`
 (иначе QEMU грузит голый Image по `0x10000`, а ядро слинковано на `0x8000`), грузит с
@@ -215,7 +215,7 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 > в `01_build.yml` тоже проверяет файлы, которые создаёт `0001`, — его список нужно
 > обновить вместе с патчем.
 
-## Если сборка упала
+## Если сборка завершилась с ошибкой
 
 | Симптом | Причина | Что делать |
 |---|---|---|
@@ -224,9 +224,9 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 | пакет автора не собирается | дрейф API ядра или LuCI | править пакет, запись в `FORK_CHANGES.md` |
 | `No space left on device` | мало места | освободить диск, `make clean` |
 | образ есть, но плата не грузится | нет `boot.bin`/`uEnv.txt` в FAT | проверить, что `apply.sh` отработал без ошибок |
-| `Verify config` упал на `CONFIG_PACKAGE_*` | `defconfig` выбросил пакет: нет в фидах или не разрешилась зависимость | смотреть шаг «Verify config», чинить зависимость пакета |
-| `Verify image` упал | собрался, но образ неработоспособен | таблица `PASS/FAIL` в шаге; битстрим, kmod, дерево устройства |
-| сборка упала, но имени пакета нет | падение на установке пакетов или сборке образа | шаг `Build` печатает хвост `build.log`; целиком — в артефакте `build-logs-<run_id>` |
+| `Verify config` завершился с ошибкой на `CONFIG_PACKAGE_*` | `defconfig` выбросил пакет: нет в фидах или не разрешилась зависимость | смотреть шаг «Verify config», чинить зависимость пакета |
+| `Verify image` завершился с ошибкой | собрался, но образ неработоспособен | таблица `PASS/FAIL` в шаге; битстрим, kmod, дерево устройства |
+| сборка завершилась с ошибкой, но имени пакета нет | падение на установке пакетов или сборке образа | шаг `Build` печатает последние строки `build.log`; целиком — в артефакте `build-logs-<run_id>` |
 
 Логи сборки: `openwrt/logs/`; в CI они выкладываются артефактом `build-logs-<run_id>`
 вместе с `build.log`, `.config`, `build-info.txt` и `patch-status.txt`.
