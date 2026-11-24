@@ -228,6 +228,24 @@ jobs:
           check_patched target/linux/zynq/base-files/etc/board.d/02_network
           check_patched target/linux/zynq/patches/0001-dts-add-antminer-s9.patch
           check_patched target/linux/zynq/patches/0002-dts-antminer-s9-led-aliases.patch
+
+          # Файлы, которые создают или меняют наши патчи 0300–0500.
+          # check_patched ловит «патч не лёг», check_content — «лёг, но не то».
+          check_patched target/linux/zynq/patches/0003-dts-antminer-s9-pl.patch
+          check_patched target/linux/zynq/config-6.12
+          check_patched target/linux/zynq/Makefile
+          check_content() {
+            if grep -q "$2" "$1"; then
+              echo "ok  $1 содержит '$2'"
+            else
+              echo "ОШИБКА: в $1 нет '$2'" >&2
+              failed=1
+            fi
+          }
+          check_content target/linux/zynq/patches/0003-dts-antminer-s9-pl.patch "fm-radio@43c60000"
+          check_content target/linux/zynq/config-6.12 "CONFIG_SND_SOC_ADI_AXI_I2S"
+          check_content target/linux/zynq/Makefile "nand"
+
           git status --short > "$GITHUB_WORKSPACE/patch-status.txt"
           exit $failed
 
