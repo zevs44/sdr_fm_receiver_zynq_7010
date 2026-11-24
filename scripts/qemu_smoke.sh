@@ -68,11 +68,21 @@ else
 fi
 echo "   ядро: $(wc -c < "$WORK/Image") байт, DTB: $(wc -c < "$WORK/board.dtb") байт"
 
+# QEMU для arm32 грузит голый Image по 0x10000, а ядро слинковано на 0x8000
+# (так и записано в FIT). Заворачиваем Image в uImage с явными адресами —
+# QEMU читает их из заголовка и ставит PC правильно.
+mkimage -A arm -O linux -T kernel -C none -a 0x8000 -e 0x8000 \
+        -n "openwrt-qemu-smoke" -d "$WORK/Image" "$WORK/kernel.uImage" >/dev/null
+echo "   uImage: $(wc -c < "$WORK/kernel.uImage") байт (load/entry 0x8000)"
+
 echo "== загрузка в QEMU (таймаут ${TIMEOUT}s) =="
+# Консоль платы — ttyPS0 = serial@e0001000 = второй UART QEMU (serial_hd(1)),
+# поэтому первый отдаём в null, второй — в stdio. Дисплей не нужен.
 set +e
 timeout "$TIMEOUT" qemu-system-arm \
-  -M xilinx-zynq-a9 -m 512 -nographic \
-  -kernel "$WORK/Image" -dtb "$WORK/board.dtb" \
+  -M xilinx-zynq-a9 -m 512 -display none \
+  -serial null -serial stdio \
+  -kernel "$WORK/kernel.uImage" -dtb "$WORK/board.dtb" \
   -append "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait earlyprintk" \
   -drive "file=$WORK/disk.img,format=raw,if=sd" \
   > "$WORK/serial.log" 2>&1
