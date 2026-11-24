@@ -55,6 +55,35 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify patches apply to the new tag
+        if: steps.cmp.outputs.changed == 'true'
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          # Не закрепляем версию, пока не убедились, что патч-слой на неё
+          # ложится: иначе `.openwrt-version` укажет на сломанную версию и
+          # каждая следующая сборка будет падать на apply.sh.
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          git clone --depth 1 --branch "$TAG" --quiet \
+            "https://github.com/${OPENWRT_REPO}.git" "$tmp/openwrt"
+          failed=0
+          shopt -s nullglob
+          for p in target-patches/*.patch; do
+            if git -C "$tmp/openwrt" apply --check -p1 "$GITHUB_WORKSPACE/$p" 2>/dev/null; then
+              echo "ok   $p"
+            else
+              echo "ОШИБКА: патч не ложится на $TAG: $p" >&2
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "Версия $TAG НЕ закреплена. Пересоберите патчи на новой базе" >&2
+            echo "(см. target-patches/README.md), затем запустите этот workflow вручную." >&2
+            exit 1
+          fi
+          echo "патч-слой ложится на $TAG"
+
       - name: Update pinned version
         if: steps.cmp.outputs.changed == 'true'
         run: |
