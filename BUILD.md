@@ -15,7 +15,35 @@
 | FAT, 16 Мб | `boot.bin`, `u-boot.img`, `uEnv.txt`, `system.bit.gz`, `fit.itb` |
 | squashfs + overlay | корневая система OpenWrt с пакетами автора |
 
-Запись на карту — обычным `dd`/balenaEtcher; прошивка платы не требует JTAG.
+## Запись на карту
+
+Прошивка платы не требует JTAG: образ пишется на microSD, плата загружается с неё.
+
+**Linux:**
+
+```bash
+lsblk                                   # найти карту, проверить /dev/sdX
+sudo dd if=sdcard-v25.12.6.img.gz of=/dev/sdX bs=4M conv=fsync status=progress
+sync
+```
+
+`dd` понимает `.gz` напрямую.
+
+**Windows — Rufus** (<https://rufus.ie>, переносная версия):
+
+1. Вставить карту, в поле **Устройство** выбрать её.
+2. **ВЫБРАТЬ** → `sdcard-v25.12.6.img.gz` (Rufus распаковывает `.gz` сам).
+3. Схема раздела — `MBR`, целевая система — `BIOS (или UEFI-CSM)`.
+4. **СТАРТ** → подтвердить → дождаться **ГОТОВО**.
+
+**Windows — Win32 Disk Imager** (<https://sourceforge.net/projects/win32diskimager/>):
+
+1. Распаковать образ (`7-Zip` или `gzip -d`): программа не читает `.gz` и `.xz`.
+2. **Image File** — распакованный `.img`; **Device** — буква карты.
+3. **Write** → подтвердить → **Done**.
+
+После записи Windows может предложить отформатировать карту — откажитесь: это
+FAT-раздел с загрузчиком. Запись стирает всё содержимое карты.
 
 ## Требования
 

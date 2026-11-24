@@ -182,3 +182,19 @@ If you need to route a signal to a connector, the procedure is:
 
 A pin that is free in the XDC is not automatically free on the board: it may be
 wired to something else. Verify with a multimeter before connecting anything.
+
+## 9. Changes in this fork
+
+The bitstream in this repository is built with two changes against the stock
+one (the rebuild script `01_rebuild_i2s_out.tcl` lives in the project workspace
+and is not part of this repository):
+
+| Item | Stock bitstream | This fork |
+|---|---|---|
+| I2S output for an external DAC | none | J6: 5 = U14 (BCLK), 15 = U15 (LRCK), 11 = U18 (DIN); 12 = U19 spare |
+| Receiver RF antenna (LVDS) | J5: 11 = V15, 12 = W15 | J8: 15 = V16, 11 = W16 |
+| FM transmitter output | T16 = J5 pin 5 | Y19 = J8 pin 5 |
+
+Other outputs (ΔΣ on J2 and J4, I2S input on J9, LEDs) are unchanged.
+Power and ground follow the other connectors: 3.3 V on pin 16, ground on
+1, 2, 9, 10, 13, 14. Pin 18 (EN) is MIO and is not used.
