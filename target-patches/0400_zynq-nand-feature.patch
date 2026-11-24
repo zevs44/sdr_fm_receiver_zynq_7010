@@ -1,0 +1,13 @@
+diff --git a/target/linux/zynq/Makefile b/target/linux/zynq/Makefile
+index 36f6dc2..b785d40 100644
+--- a/target/linux/zynq/Makefile
++++ b/target/linux/zynq/Makefile
+@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
+ ARCH:=arm
+ BOARD:=zynq
+ BOARDNAME:=Xilinx Zynq 7000 SoCs
+-FEATURES:=fpu gpio rtc usb usbgadget boot-part rootfs-part squashfs
++FEATURES:=fpu gpio rtc usb usbgadget boot-part rootfs-part squashfs nand
+ CPU_TYPE:=cortex-a9
+ CPU_SUBTYPE:=neon
+ SUBTARGETS:=generic
