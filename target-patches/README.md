@@ -6,7 +6,7 @@
 | Файл | Что делает | Источник |
 |---|---|---|
 | `0001_openwrt-backport-antminer-s9.patch` | Поддержка платы Bitmain Antminer S9: `uboot-zynq` (сборка U-Boot + патч SD-boot), `board.d/02_network`, устройство в `image/Makefile`, два DTS-патча (PS) | upstream commit `e050bb7`, автор Zoltan HERPAI |
-| `0200_zynq-sdcard-bitstream-and-uenv.patch` | В `Build/zynq-sdcard`: копирование `system.bit.gz` в FAT-раздел и подмена `uEnv.txt` на наш (с `fpga loadb`) | наш патч |
+| `0200_zynq-sdcard-bitstream-and-uenv.patch` | В `Build/zynq-sdcard`: копирование `system.bit.gz` в FAT-раздел и подмена `uEnv.txt` на наш (с `fpga loadb`). Свои переменные образа (`BOOTBIN_FILE` и др.) добавлены в `DEVICE_VARS` — без этого `Device/Export` берёт значение последнего описанного устройства | наш патч |
 
 ## Почему бэкпорт, а не сборка из master
 
