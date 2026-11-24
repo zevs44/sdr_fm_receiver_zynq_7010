@@ -2,7 +2,23 @@
 
 > **Форк:** https://github.com/zevs44/sdr_fm_receiver_zynq_7010
 > **Родитель:** https://github.com/alexsys87/sdr_fm_receiver_zynq_7010
-> **Актуально на:** 2026-11-23
+> **Актуально на:** 2026-11-24
+
+## Что взято у автора без изменений
+
+Форк — это **репозиторий автора плюс слой сборки**. Ни один файл автора не удалён:
+
+- `vivado_2023.2/` — проект Vivado, блок-дизайн, RTL, XDC и IP — как у автора;
+- все 19 пакетов из `packages/` — как у автора (изменены только три файла, см. журнал);
+- `README.md`, `README.ru.md` — текст автора.
+
+Готовый загрузчик (`bootloader/`) и битстрим (`bitstream/`) взяты из **релиза**
+автора: в репозитории бинарных файлов нет.
+
+`nand_install` — **идея автора** (скрипт из его второго проекта
+`Antminer_S9_OpenWRT`). Наш пакет `nand-install` сохраняет порядок записи и
+развивает его: проверки сигнатур и размеров, пробный запуск с меткой,
+подтверждение словом, `flock`, журнал, проверка чтением.
 
 ## Зачем этот файл
 
@@ -85,7 +101,7 @@ gh repo sync zevs44/sdr_fm_receiver_zynq_7010 --branch main
 | 38 | 2026-11-24 | документация | В `BUILD.md` и `target-patches/README.md` описано, что делать, когда бэкпорт `0001` станет лишним (плата уйдёт в стабильную ветку 26.x), и что список файлов шага «Audit patch layer» нужно менять вместе с патчем | переход на новую версию не должен упираться в неочевидное «патч не ложится» | `BUILD.md`, `target-patches/README.md` | сделано |
 | 39 | 2026-11-24 | device tree | `0300_zynq-antminer-s9-pl.patch` — узлы PL: `axi_i2s_adi@43c00000`, `fm-radio@43c60000`, `audio_clock` (12.288 МГц), `sound` с двумя DAI-link, `playback/capture-codec` | без узлов драйвер радио и ALSA-карта не появляются. Адреса сверены с `design_1.bd`; источник — DTB образа автора. Патч проверен `git apply` на DTS из `0001` | `target-patches/0300_zynq-antminer-s9-pl.patch` | сделано |
 | 40 | 2026-11-24 | NAND | Пакет `nand-install` (`/sbin/nand_install`) по шаблону L3: проверки, сигнатуры, размеры, dry-run с меткой, подтверждение `INSTALL`, `flock`, журнал, двухэтапная запись, `mtd verify`; корневая ФС — из `/rom`. Цель `zynq` получает признак `nand` (патч `0400`), после чего доступны штатные `ubi-utils`/`nand-utils` из ядра OpenWrt | без `ubiformat`/`ubiattach` установка в NAND невозможна; в 25.12 эти пакеты есть, но скрыты за `@NAND_SUPPORT`, которого у zynq не было. Копия `mtd-utils` из второго репозитория не понадобилась — конфликтует с ядром («Not overriding core package») | `packages/nand-install/`, `target-patches/0400_zynq-nand-feature.patch`, `configs/zynq_antminer_s9.config` | сделано |
-| 41 | 2026-11-24 | конфигурация | Включены `CONFIG_KERNEL_SND`, `SND_SOC`, `SND_SOC_ADI`, `SND_SOC_ADI_AXI_I2S`, `SND_SIMPLE_CARD`, `SND_SOC_SPDIF` | в конфигурации ядра не было ALSA SoC: без этого узлы DTS бесполезны — карта `audio` не появится | `configs/zynq_antminer_s9.config` | сделано |
+| 41 | 2026-11-24 | конфигурация | Патч `0500_zynq-sound-config.patch` добавляет в `target/linux/zynq/config-6.12`: `CONFIG_SND`, `SND_SOC`, `SND_SOC_ADI`, `SND_SOC_ADI_AXI_I2S`, `SND_SIMPLE_CARD`, `SND_SOC_SPDIF` | в конфигурации ядра не было ALSA SoC: без этого узлы DTS бесполезны — карта `audio` не появится. Символы `CONFIG_KERNEL_*` в `.config` defconfig выбрасывает (не знает их), поэтому только через конфиг цели | `target-patches/0500_zynq-sound-config.patch` | сделано |
 
 ## Планируемые изменения
 
