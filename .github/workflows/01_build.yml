@@ -23,7 +23,7 @@ on:
         default: ""
       # — шаг 04: релиз —
       tag:
-        description: "Шаг 04: тег релиза (например v25.12.6); пусто = тег из push"
+        description: "Шаг 04: тег релиза (например v1.1); пусто = тег из push"
         required: false
         default: ""
       release_run_id:
@@ -522,8 +522,8 @@ jobs:
   # Сам ничего не собирает: находит зелёный прогон шагов 01–03 для коммита
   # тега, скачивает артефакт sdcard-*, считает SHA-256 и прикладывает файл.
   #
-  #   git tag v25.12.6 && git push origin v25.12.6           — по тегу
-  #   gh workflow run 01_build.yml -f tag=v25.12.6           — вручную
+  #   git tag v1.1 && git push origin v1.1           — по тегу
+  #   gh workflow run 01_build.yml -f tag=v1.1           — вручную
   #   gh workflow run 01_build.yml -f release_run_id=<id>    — из прогона
   release:
     name: 04 release
@@ -654,10 +654,14 @@ jobs:
           sha="$(cut -d' ' -f1 artifacts/SHA256SUMS)"
           prev="$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)"
           {
-            echo "Образ OpenWrt **$openwrt** для Antminer S9 (Zynq-7010, XC7Z010)."
+            echo "## OPENWRT $openwrt"
+            echo
+            echo "Образ для Antminer S9 (Zynq-7010, XC7Z010), собран на OpenWrt **$openwrt**."
+            echo "Номер релиза — версия образа этого проекта; версия OpenWrt — в заголовке."
             echo
             echo "| Параметр | Значение |"
             echo "|---|---|"
+            echo "| OpenWrt | **$openwrt** |"
             echo "| Файл | \`$(basename "$IMG")\` |"
             echo "| Размер | $size байт |"
             echo "| SHA-256 | \`$sha\` |"
