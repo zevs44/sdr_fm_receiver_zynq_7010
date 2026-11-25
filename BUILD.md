@@ -110,19 +110,28 @@ OpenWrt: если тег новее, чем в `.openwrt-version`, **снача�
 чистит все workflow репозитория, включая собственные прошлые прогоны чистки (текущий
 прогон не удаляется никогда). GitHub считает workflow по пути файла, поэтому прогоны,
 созданные до переименований (`build.yml`, `watch-upstream.yml`, а также `02_watch-upstream.yml`,
-`03_cleanup-runs.yml`, `04_qemu-smoke.yml`, `99_watch-upstream.yml`, `02_cleanup-runs.yml`, `03_qemu-smoke.yml`), к новым файлам не относятся
+`03_cleanup-runs.yml`, `04_qemu-smoke.yml`, `99_watch-upstream.yml`, `02_cleanup-runs.yml`, `03_qemu-smoke.yml`,
+`02_qemu-smoke.yml`, `03_release.yml` — два последних были отдельными workflow и вошли в `01_build.yml`), к новым файлам не относятся
 и под фильтр по имени файла не попадают — разово их можно удалить с `workflow: all`.
 
-`.github/workflows/02_qemu-smoke.yml` — загрузка уже собранного образа в QEMU
-(`xilinx-zynq-a9`), без пересборки. Подробности — ниже.
+`.github/workflows/01_build.yml` — единый конвейер из четырёх пронумерованных джоб:
+`01 lint` → `02 build` → `03 qemu smoke` → `04 release`. Джоба — шаг конвейера,
+номер стоит и в `name:` и виден в списке прогона: сбой называет свой шаг.
+По тегу `v*` выполняются `01 lint` и `04 release`: публикация берёт готовый образ
+из зелёного прогона, пересборки нет.
 
 ### Проверка в QEMU
 
+QEMU — шаг `03 qemu smoke` конвейера: идёт после сборки, берёт её артефакт,
+пересборки нет. Перепроверить образ можно, повторив только этот шаг —
+прогон сохраняет свои артефакты, повтор их не пересобирает:
+
 ```bash
-# образ из последнего успешного прогона «01 build image»
-gh workflow run 02_qemu-smoke.yml
-# или конкретный прогон
-gh workflow run 02_qemu-smoke.yml -f run_id=<run_id> -f timeout_seconds=180
+# повторить упавшие джобы прогона (обычно это 03 qemu smoke)
+gh run rerun <run_id>
+
+# одну конкретную джобу: JOB_ID берётся из `gh run view <run_id> --json jobs`
+gh run rerun <run_id> --job <job_id>
 ```
 
 Что делает `scripts/qemu_smoke.sh`: распаковывает образ, дополняет его до 256 Мб
@@ -137,27 +146,28 @@ PASS — появился init (`procd: - init complete -`), FAIL — kernel pan
 
 ### Релиз
 
-`.github/workflows/03_release.yml` публикует GitHub Release из **уже собранного** образа.
-Сам он ничего не собирает: находит зелёный прогон «01 build image» для коммита тега,
-скачивает артефакт `sdcard-*`, считает SHA-256 и прикладывает файл к релизу.
+Джоба `04 release` того же `01_build.yml` публикует GitHub Release из **уже собранного**
+образа. Сама она ничего не собирает: находит зелёный прогон шагов `01–03` для коммита
+тега, скачивает артефакт `sdcard-*`, считает SHA-256 и прикладывает файл к релизу.
 
 ```bash
 # по тегу (запускается автоматически)
 git tag v25.12.6 && git push origin v25.12.6
 
 # вручную: тег и/или конкретный прогон
-gh workflow run 03_release.yml -f tag=v25.12.6
-gh workflow run 03_release.yml -f run_id=<run_id>
+gh workflow run 01_build.yml -f tag=v25.12.6
+gh workflow run 01_build.yml -f release_run_id=<run_id>
 
 # обновить уже существующий релиз
-gh workflow run 03_release.yml -f tag=v25.12.6 -f overwrite=true
+gh workflow run 01_build.yml -f tag=v25.12.6 -f overwrite=true
 ```
 
 Правила, которые workflow проверяет сам:
 
 - тег обязан начинаться с `v`;
-- для коммита тега должен быть **успешный** прогон `01 build image` (иначе релиз не создаётся);
-- при явном `run_id` проверяется, что прогон успешен;
+- для коммита тега должен быть **успешный** прогон с артефактом `sdcard-*` (иначе релиз
+  не создаётся; прогон по тегу образа не собирает и сам в кандидаты не попадает);
+- при явном `release_run_id` проверяется, что прогон успешен;
 - существующий релиз не перезаписывается без `overwrite=true`;
 - тег с дефисом (`v25.12.6-rc1`) помечается как pre-release.
 
