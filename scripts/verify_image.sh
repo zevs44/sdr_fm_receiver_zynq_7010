@@ -141,6 +141,11 @@ if [ -n "$fat_off" ]; then
     else
       bad "uEnv.txt не грузит fit.itb"
     fi
+    if grep -q "earlyprintk" "$TMP/uEnv.txt"; then
+      bad "uEnv.txt содержит earlyprintk — ядро сообщит о неизвестном параметре"
+    else
+      ok "uEnv.txt без лишнего earlyprintk"
+    fi
     if [ -f "$HERE/files/uEnv.txt" ] &&
        [ "$(sha256sum < "$TMP/uEnv.txt" | cut -d' ' -f1)" = "$(sha256sum < "$HERE/files/uEnv.txt" | cut -d' ' -f1)" ]; then
       ok "uEnv.txt совпадает с files/uEnv.txt"
@@ -190,6 +195,14 @@ if [ -n "$fat_off" ]; then
             bad "DTB: нет узла $node (нет /dev/radio0 и ALSA-карты)"
           fi
         done
+        # Разделы NAND: без них /proc/mtd пуст и nand_install не работает.
+        for label in boot uboot fpga uboot_env kernel rootfs; do
+          if grep -q "label = \"$label\";" "$TMP/board.dts"; then
+            ok "DTB: раздел NAND $label"
+          else
+            bad "DTB: нет раздела NAND $label (nand_install не найдёт метку)"
+          fi
+        done
       else
         bad "DTB: не удалось извлечь или разобрать DTB из fit.itb"
       fi
@@ -216,6 +229,7 @@ if [ -n "$rootfs_off" ]; then
       check_in_rootfs "usr/bin/csdr"
       check_in_rootfs "usr/bin/mympd"
       check_in_rootfs "sbin/nand_install"
+      check_in_rootfs "etc/uci-defaults/99_antminer_setup"
       check_in_rootfs "usr/libexec/rpcd/fmradio"
       check_in_rootfs "etc/init.d/fmradio"
       if grep -qE "/lib/modules/[^/]+/zynq_fm_radio\.ko$" "$TMP/rootfs.list"; then

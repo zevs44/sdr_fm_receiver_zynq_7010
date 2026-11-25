@@ -1,0 +1,54 @@
+diff --git a/target/linux/zynq/patches/0004-dts-antminer-s9-nand.patch b/target/linux/zynq/patches/0004-dts-antminer-s9-nand.patch
+new file mode 100644
+index 0000000..52afad0
+--- /dev/null
++++ b/target/linux/zynq/patches/0004-dts-antminer-s9-nand.patch
+@@ -0,0 +1,48 @@
++diff --git a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
++index 136d0ac..9d3946f 100644
++--- a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
+++++ b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
++@@ -178,3 +178,43 @@
++ 		};
++ 	};
++ };
+++
+++/*
+++ * Разделы NAND — раскладка автора (второй репозиторий Antminer_S9_OpenWRT).
+++ * Метки обязаны совпадать с nand_install: boot, uboot, fpga, uboot_env,
+++ * kernel, rootfs.
+++ */
+++&nfc0 {
+++	nand@0 {
+++		partitions {
+++			compatible = "fixed-partitions";
+++			#address-cells = <1>;
+++			#size-cells = <1>;
+++
+++			partition@0 {
+++				label = "boot";
+++				reg = <0x00000000 0x00080000>;
+++			};
+++			partition@80000 {
+++				label = "uboot";
+++				reg = <0x00080000 0x00280000>;
+++			};
+++			partition@300000 {
+++				label = "fpga";
+++				reg = <0x00300000 0x00400000>;
+++			};
+++			partition@700000 {
+++				label = "uboot_env";
+++				reg = <0x00700000 0x00080000>;
+++			};
+++			partition@780000 {
+++				label = "kernel";
+++				reg = <0x00780000 0x00a00000>;
+++			};
+++			partition@1180000 {
+++				label = "rootfs";
+++				reg = <0x01180000 0x0ee80000>;
+++			};
+++		};
+++	};
+++};

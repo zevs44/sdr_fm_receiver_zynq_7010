@@ -4,6 +4,6 @@
 # Проверено на образе автора (v1.0.0): последовательность та же,
 # добавлен clk_ignore_unused — без него PL-часы гасятся после загрузки битстрима.
 
-bootargs=console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait earlyprintk clk_ignore_unused
+bootargs=console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait clk_ignore_unused
 
 uenvcmd=load mmc 0 0x2000000 system.bit.gz; unzip 0x2000000 0x3000000; fpga loadb 0 0x3000000 ${filesize}; load mmc 0 0x4000000 fit.itb; bootm 0x4000000

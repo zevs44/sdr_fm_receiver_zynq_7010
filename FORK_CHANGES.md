@@ -2,7 +2,7 @@
 
 > **Форк:** https://github.com/zevs44/sdr_fm_receiver_zynq_7010
 > **Родитель:** https://github.com/alexsys87/sdr_fm_receiver_zynq_7010
-> **Актуально на:** 2026-11-24
+> **Актуально на:** 2026-11-25
 
 Это описание **текущей разницы** между двумя репозиториями, а не история
 разработки: что взято у автора, что изменено и что добавлено. Форк содержит
@@ -45,8 +45,10 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 | `0001_openwrt-backport-antminer-s9.patch` | бэкпорт поддержки платы из upstream (`e050bb7`): `board.d/02_network`, устройство в `image/Makefile`, два DTS-патча. Изменения `uboot-zynq` исключены — загрузчик поставляется готовым | в ветке 25.12 платы нет |
 | `0200_zynq-sdcard-bitstream-and-uenv.patch` | в `Build/zynq-sdcard` файлы FAT берутся из нашей папки `antminer/`: `boot.bin`, `u-boot.img`, `uEnv.txt`, плюс `system.bit.gz` и `uboot_env.bin`; переменные образа объявлены в `DEVICE_VARS` | штатный образ не грузит битстрим и наш `uEnv.txt` |
 | `0300_zynq-antminer-s9-pl.patch` | узлы PL в DTS: `axi_i2s_adi@43c00000`, `fm-radio@43c60000`, `audio_clock`, `sound` | без узлов нет `/dev/radio0` и ALSA-карты |
+| `0310_zynq-antminer-s9-nand.patch` | таблица разделов NAND в DTS (`boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs`), раскладка автора | без меток `/proc/mtd` пуст и `nand_install` не находит разделы |
 | `0400_zynq-nand-feature.patch` | добавляет признак `nand` в `FEATURES` цели | открывает штатные `ubi-utils`/`nand-utils`, скрытые за `@NAND_SUPPORT` |
-| `0500_zynq-sound-config.patch` | включает в конфиге ядра `CONFIG_SND*`: ALSA SoC, ADI AXI-I2S, simple-card, SPDIF | узлы DTS без драйверов бесполезны |
+| `0500_zynq-sound-config.patch` | включает в конфиге ядра `CONFIG_SOUND` и `CONFIG_SND*`: ALSA SoC, ADI AXI-I2S, simple-card, SPDIF | без `CONFIG_SOUND` kconfig отбрасывает все `SND*` без сообщения об ошибке — звука в образе нет |
+| `0600_zynq-nand-config.patch` | включает `CONFIG_MTD_RAW_NAND`, `CONFIG_MTD_NAND_PL35X`, `CONFIG_PL353_SMC`, `CONFIG_MTD_UBI`, `CONFIG_UBIFS_FS` | драйвер NAND скрыт за `MTD_RAW_NAND`; без UBI/UBIFS `nand_install` не смонтирует том |
 
 ### 3.2 Конфигурация и файлы образа
 
@@ -55,15 +57,17 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
   (LuCI с темой и TLS, `i2c-tools`, `mympd`, `nand-install`, утилиты mtd/ubi).
 - `files/uEnv.txt` — загрузочное окружение U-Boot: `fpga loadb` и
   `clk_ignore_unused`.
+- `files/etc/uci-defaults/99_antminer_setup` — первичная настройка при первой
+  загрузке: сеть, IPv6, время, MAC и hostname (раздел 3.6).
 - `.openwrt-version` — единственный источник версии OpenWrt.
 
 ### 3.3 Скрипты
 
 | Скрипт | Назначение |
 |---|---|
-| `scripts/apply.sh` | накладывает патчи (с проверкой), копирует загрузчик/битстрим/`uEnv.txt`, подключает фид автора, ставит все фиды, убирает дубль `/etc/init.d/mpd` из фида, применяет конфиг и `defconfig` |
-| `scripts/check_config.sh` | сверяет запрошенный конфиг с итоговым: ловит пакеты, которые `defconfig` без сообщения исключил |
-| `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL в DTB, `/sbin/nand_install` |
+| `scripts/apply.sh` | накладывает патчи (с проверкой), копирует загрузчик/битстрим/`uEnv.txt`, копирует `files/etc` в корневую файловую систему, подключает фид автора, ставит все фиды, убирает дубль `/etc/init.d/mpd` из фида, применяет конфиг и `defconfig` |
+| `scripts/check_config.sh` | сверяет запрошенный конфиг с итоговым (пакеты, которые `defconfig` исключил) и проверяет обязательные опции ядра в `target/linux/zynq/config-6.12` |
+| `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL и разделы NAND в DTB, `/sbin/nand_install`, первичную настройку |
 | `scripts/qemu_smoke.sh` | загружает образ в QEMU (`xilinx-zynq-a9`) и ждёт init |
 | `scripts/expected-artifacts.sha256` | контрольные суммы загрузчика, битстрима и `uEnv.txt` |
 
@@ -81,6 +85,22 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
   форка (на английском и русском);
 - `BUILD.md` — сборка образа и проверки;
 - `FORK_CHANGES.md` — этот документ.
+
+### 3.6 Первичная настройка при загрузке
+
+Скрипт `files/etc/uci-defaults/99_antminer_setup` попадает в образ и
+выполняется один раз при первой загрузке, после чего OpenWrt удаляет файл.
+
+| Что настраивается | Значение |
+|---|---|
+| Сеть | единственный интерфейс `eth0` по DHCP; `wan`, `wan6`, `br-lan` и все `device` удалены и созданы заново; `packet_steering = 1` (два ядра) |
+| IPv6 | выключен: `dhcpv6`, `ra`, `ula_prefix`, `delegate`; служба `odhcpd` отключена |
+| Время | `Europe/Moscow`, `MSK-3`; NTP-серверы заданы явно: `0.ru.pool.ntp.org`, `1.ru.pool.ntp.org`, `0.europe.pool.ntp.org` |
+| MAC | локально администрируемый (`02:…`), генерируется при первой загрузке, хранится в `/etc/antminer-mac` |
+| Hostname | `owrt-zynq7010-XXXX`, где `XXXX` — последние 4 шестнадцатеричных знака MAC |
+
+Проверка на плате: `uci show network`, `uci get system.@system[0].hostname`,
+`cat /etc/antminer-mac`, `ip -4 addr show eth0`.
 
 ## 4. Добавленные пакеты
 

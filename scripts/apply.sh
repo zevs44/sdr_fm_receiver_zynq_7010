@@ -76,6 +76,15 @@ fi
 cp "$HERE/files/uEnv.txt" "$OWRT/antminer/uEnv.txt"
 echo "   uEnv.txt: скопирован"
 
+# Файлы корневой системы (первичная настройка через uci-defaults).
+# Кладём только подкаталог etc: files/uEnv.txt нужен в FAT, а не в корне.
+if [ -d "$HERE/files/etc" ]; then
+  mkdir -p "$OWRT/files/etc"
+  cp -a "$HERE/files/etc/." "$OWRT/files/etc/"
+  find "$OWRT/files/etc/uci-defaults" -type f -exec chmod 755 {} \; 2>/dev/null || true
+  echo "   files/etc: $(( $(find "$OWRT/files/etc" -type f | wc -l) )) файл(ов) в корневой ФС"
+fi
+
 echo "== 3. feeds автора =="
 cd "$OWRT"
 if ! grep -q '^src-link antminer ' feeds.conf.default 2>/dev/null; then

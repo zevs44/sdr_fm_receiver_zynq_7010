@@ -1,0 +1,73 @@
+#!/bin/sh
+# 99_antminer_setup — первичная настройка платы Antminer S9 (Zynq-7010).
+# Лежит в образе как /etc/uci-defaults/99_antminer_setup и выполняется ровно
+# один раз при первой загрузке; после успеха OpenWrt удаляет файл сам.
+
+# --- 1. Сеть: единственный интерфейс eth0 по DHCP ---------------------------
+uci -q delete network.loopback
+uci -q delete network.globals
+uci -q delete network.lan
+uci -q delete network.wan
+uci -q delete network.wan6
+while uci -q delete network.@device[0]; do :; done
+
+uci set network.loopback=interface
+uci set network.loopback.device='lo'
+uci set network.loopback.proto='static'
+uci set network.loopback.ipaddr='127.0.0.1'
+uci set network.loopback.netmask='255.0.0.0'
+
+# Два ядра: раскладывать обработку пакетов по ядрам.
+uci set network.globals=globals
+uci set network.globals.packet_steering='1'
+
+uci add network device >/dev/null
+uci set network.@device[-1].name='eth0'
+uci set network.@device[-1].igmp_snooping='1'
+uci set network.@device[-1].ipv6='0'
+
+uci set network.lan=interface
+uci set network.lan.device='eth0'
+uci set network.lan.proto='dhcp'
+uci set network.lan.ipv6='0'
+uci set network.lan.delegate='0'
+
+# --- 2. IPv6 выключен полностью ---------------------------------------------
+uci -q delete dhcp.lan.dhcpv6
+uci -q delete dhcp.lan.ra
+uci -q delete dhcp.lan.ra_slaac
+uci -q delete dhcp.lan.ra_flags
+uci -q delete dhcp.odhcpd
+uci commit dhcp
+/etc/init.d/odhcpd disable
+/etc/init.d/odhcpd stop 2>/dev/null
+
+# --- 3. Уникальные MAC и hostname -------------------------------------------
+# Образ один на все платы: MAC генерируется при первой загрузке, локально
+# администрируемый (02:…), хранится в /etc/antminer-mac и дальше не меняется.
+# Фиксированный адрес: заменить блок на MAC='…' и HOSTNAME='…'.
+if [ -s /etc/antminer-mac ]; then
+	MAC=$(cat /etc/antminer-mac)
+else
+	RND=$(head -c 32 /dev/urandom | md5sum | cut -c1-10)
+	MAC="02:$(echo "$RND" | sed 's/../&:/g; s/:$//')"
+	echo "$MAC" > /etc/antminer-mac
+fi
+SUFFIX=$(echo "$MAC" | tr -d ':' | cut -c9-12)
+HOSTNAME="owrt-zynq7010-$SUFFIX"
+uci set network.@device[-1].macaddr="$MAC"
+
+# --- 4. Время: Москва, NTP-серверы заданы явно -------------------------------
+uci -q delete system.ntp
+uci set system.@system[0].timezone='MSK-3'
+uci set system.@system[0].zonename='Europe/Moscow'
+uci set system.@system[0].hostname="$HOSTNAME"
+uci set system.ntp=timeserver
+uci set system.ntp.use_dhcp='0'
+uci add_list system.ntp.server='0.ru.pool.ntp.org'
+uci add_list system.ntp.server='1.ru.pool.ntp.org'
+uci add_list system.ntp.server='0.europe.pool.ntp.org'
+
+uci commit network
+uci commit system
+exit 0

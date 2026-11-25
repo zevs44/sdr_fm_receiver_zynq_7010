@@ -1,0 +1,14 @@
+diff --git a/target/linux/zynq/config-6.12 b/target/linux/zynq/config-6.12
+index bd67da0..29a7805 100644
+--- a/target/linux/zynq/config-6.12
++++ b/target/linux/zynq/config-6.12
+@@ -565,3 +565,9 @@
+ # CONFIG_SND_SOC_ADI_AXI_SPDIF is not set
+ CONFIG_SND_SIMPLE_CARD=y
+ CONFIG_SND_SOC_SPDIF=y
++# NAND: контроллер PL353 (Zynq-7010), драйвер PL35X, UBI/UBIFS для nand_install
++CONFIG_MTD_RAW_NAND=y
++CONFIG_MTD_NAND_PL35X=y
++CONFIG_PL353_SMC=y
++CONFIG_MTD_UBI=y
++CONFIG_UBIFS_FS=y
