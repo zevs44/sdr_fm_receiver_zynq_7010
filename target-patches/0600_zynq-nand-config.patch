@@ -1,8 +1,8 @@
 diff --git a/target/linux/zynq/config-6.12 b/target/linux/zynq/config-6.12
-index bd67da0..29a7805 100644
+index bd67da0..e74f06b 100644
 --- a/target/linux/zynq/config-6.12
 +++ b/target/linux/zynq/config-6.12
-@@ -565,3 +565,9 @@
+@@ -565,3 +565,15 @@
  # CONFIG_SND_SOC_ADI_AXI_SPDIF is not set
  CONFIG_SND_SIMPLE_CARD=y
  CONFIG_SND_SOC_SPDIF=y
@@ -12,3 +12,9 @@ index bd67da0..29a7805 100644
 +CONFIG_PL353_SMC=y
 +CONFIG_MTD_UBI=y
 +CONFIG_UBIFS_FS=y
++# Дочерние символы заданы явно: иначе syncconfig спрашивает значение,
++# stdin не терминал — сборка падает (прогон 45664810670).
++CONFIG_MTD_UBI_WL_THRESHOLD=4096
++CONFIG_MTD_UBI_BEB_LIMIT=20
++# CONFIG_MTD_UBI_BLOCK is not set
++# CONFIG_MTD_UBI_FAULT_INJECTION is not set
