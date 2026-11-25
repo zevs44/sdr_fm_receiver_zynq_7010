@@ -672,7 +672,8 @@ jobs:
             echo "## Установка"
             echo
             echo "Записать образ на microSD (Rufus, Win32 Disk Imager или \`dd\`),"
-            echo "вставить в плату, JP1–JP4 = \`0 0 0 0\`. Подробности — \`BUILD.md\`."
+            echo "вставить в плату, перемычки JP1–JP4 = \`0 1 0 1\` (TF Card: JP2 = 1, JP4 = 1)."
+            echo "Значение \`0 0 0 0\` — это Cascade JTAG, с ним плата с карты не загрузится. Подробности — \`BUILD.md\`."
           } > release-notes.md
           cat release-notes.md
 
