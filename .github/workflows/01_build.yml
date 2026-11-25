@@ -23,7 +23,7 @@ on:
         default: ""
       # — шаг 04: релиз —
       tag:
-        description: "Шаг 04: тег релиза (например v1.1); пусто = тег из push"
+        description: "Шаг 04: тег релиза (например v1.1.0); пусто = тег из push"
         required: false
         default: ""
       release_run_id:
@@ -522,8 +522,8 @@ jobs:
   # Сам ничего не собирает: находит зелёный прогон шагов 01–03 для коммита
   # тега, скачивает артефакт sdcard-*, считает SHA-256 и прикладывает файл.
   #
-  #   git tag v1.1 && git push origin v1.1           — по тегу
-  #   gh workflow run 01_build.yml -f tag=v1.1           — вручную
+  #   git tag v1.1.0 && git push origin v1.1.0           — по тегу
+  #   gh workflow run 01_build.yml -f tag=v1.1.0           — вручную
   #   gh workflow run 01_build.yml -f release_run_id=<id>    — из прогона
   release:
     name: 04 release
