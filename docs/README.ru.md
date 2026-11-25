@@ -5,7 +5,7 @@
 
 | Документ | Язык | Содержание |
 |---|---|---|
-| [audio-path.md](audio-path.md) | English | аудиопотоки, внешние пины, распиновка колодок, управление мюксом, проверка, подводные камни |
+| [audio-path.md](audio-path.md) | English | аудиопотоки, внешние пины, распиновка колодок, управление мюксом, проверка, ограничения и риски |
 | [audio-path.ru.md](audio-path.ru.md) | Русский | то же на русском |
 | [rebuild-bitstream.md](rebuild-bitstream.md) | English | установка Vivado, лицензия, правка проекта, сборка, прошивка без JTAG, типовые ошибки |
 | [rebuild-bitstream.ru.md](rebuild-bitstream.ru.md) | Русский | то же на русском |
