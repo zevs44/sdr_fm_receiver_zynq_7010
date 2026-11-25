@@ -220,7 +220,7 @@ jobs:
           check_patched target/linux/zynq/patches/0004-dts-antminer-s9-nand.patch
           check_patched target/linux/zynq/Makefile
           # Имя конфига ядра зависит от версии: config-6.12, config-6.18 и т. д.
-          kconf="$(ls target/linux/zynq/config-6.* 2>/dev/null | tail -1 || true)"
+          kconf="$(find target/linux/zynq -maxdepth 1 -name 'config-6.*' 2>/dev/null | sort | tail -1)"
           if [ -z "$kconf" ]; then
             echo "ОШИБКА: в target/linux/zynq нет config-6.*" >&2
             failed=1

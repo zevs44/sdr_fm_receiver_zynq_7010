@@ -104,7 +104,7 @@ done < "$REQ"
 # исчезают из ядра, а сборка остаётся успешной (образ v25.12.6, журнал
 # 17_boot_log_v25.12.6.log).
 # Имя файла берём шаблоном: при смене ядра оно станет config-6.18 и т. п.
-KCONF="$(ls "$OWRT/target/linux/zynq"/config-6.* 2>/dev/null | tail -1 || true)"
+KCONF="$(find "$OWRT/target/linux/zynq" -maxdepth 1 -name 'config-6.*' 2>/dev/null | sort | tail -1 || true)"
 if [ -z "$KCONF" ]; then
   echo
   echo "ОШИБКА: в target/linux/zynq нет config-6.* — цель не найдена или патчи не легли." >&2
