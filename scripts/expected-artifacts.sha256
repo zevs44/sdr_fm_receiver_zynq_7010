@@ -1,7 +1,7 @@
 # Контрольные суммы входных двоичных файлов.
-# Проверяются до сборки: shasum -c scripts/expected-artifacts.sha256
+# Проверяются до сборки: sha256sum -c scripts/expected-artifacts.sha256
 # Ловит битый коммит, порчу переводов строк и подмену артефакта.
-# При замене файла обновить здесь, в README рядом и записью в FORK_CHANGES.md.
+# Обновление: bash scripts/update_expected_artifacts.sh
 950d19c6e5bfd9d8107def130b19fc9a5f64d824b26c0c493d5fdfe8503edac4  bootloader/boot.bin
 f86c48050993d6afda5c41caa6477aaea74a0122880ed985986ed2f6af000c90  bootloader/u-boot.img
 a5811783049db88f93e2be6a015693a64de707417e5d8f21b58ee657b3395623  bootloader/uboot_env.bin

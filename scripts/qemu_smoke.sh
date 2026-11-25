@@ -35,9 +35,15 @@ gzip -dc "$IMG_GZ" > "$WORK/disk.img"
 echo "   размер: $(wc -c < "$WORK/disk.img") байт"
 
 # Модель SD-карты в QEMU принимает только размер-степень-двойки, а образ
-# усечён (31 МБ при разделах 16 + 200 МБ). Дополняем нулями до 256 МБ:
-# разделы целиком внутри, squashfs читается как обычно.
-truncate -s 256M "$WORK/disk.img"
+# усечён (31 МБ при разделах 16 + 200 МБ). Дополняем нулями до ближайшей
+# степени двойки не меньше 256 МБ: если образ вырастет, truncate не урежет его.
+need="$(wc -c < "$WORK/disk.img")"
+size=$((256 * 1024 * 1024))
+while [ "$size" -lt "$need" ]; do
+  size=$((size * 2))
+done
+truncate -s "$size" "$WORK/disk.img"
+echo "   размер для QEMU: $size байт"
 
 echo "== поиск FAT-раздела =="
 fat_off=""
@@ -59,8 +65,21 @@ mcopy -i "$WORK/disk.img@@$fat_off" ::fit.itb "$WORK/fit.itb"
 dumpimage -l "$WORK/fit.itb"
 
 echo "== извлечение ядра и DTB =="
-dumpimage -T flat_dt -p 0 -o "$WORK/kernel.gz" "$WORK/fit.itb" >/dev/null
-dumpimage -T flat_dt -p 1 -o "$WORK/board.dtb" "$WORK/fit.itb" >/dev/null
+dumpimage -l "$WORK/fit.itb" > "$WORK/fit.list"
+# Порядок образов в FIT может измениться: ищем по типу, индексы 0/1 — запасной путь.
+fit_index() {
+  awk -v want="$1" '
+    /^ *Image [0-9]+/ { idx=$2; sub(/[^0-9].*/, "", idx); type=""; next }
+    /Type:/ { t=$0; sub(/.*Type: */, "", t); if (t == want) { print idx; exit } }
+  ' "$WORK/fit.list"
+}
+kidx="$(fit_index "Kernel Image")"
+didx="$(fit_index "Flat Device Tree")"
+[ -n "$kidx" ] || kidx=0
+[ -n "$didx" ] || didx=1
+echo "   образы FIT: ядро #$kidx, DTB #$didx"
+dumpimage -T flat_dt -p "$kidx" -o "$WORK/kernel.gz" "$WORK/fit.itb" >/dev/null
+dumpimage -T flat_dt -p "$didx" -o "$WORK/board.dtb" "$WORK/fit.itb" >/dev/null
 if [ "$(head -c2 "$WORK/kernel.gz" | od -An -tx1 | tr -d ' \n')" = "1f8b" ]; then
   gunzip -c "$WORK/kernel.gz" > "$WORK/Image"
 else
@@ -83,7 +102,7 @@ timeout "$TIMEOUT" qemu-system-arm \
   -M xilinx-zynq-a9 -m 512 -display none \
   -serial null -serial stdio \
   -kernel "$WORK/kernel.uImage" -dtb "$WORK/board.dtb" \
-  -append "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait earlyprintk" \
+  -append "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait" \
   -drive "file=$WORK/disk.img,format=raw,if=sd" \
   > "$WORK/serial.log" 2>&1
 rc=$?

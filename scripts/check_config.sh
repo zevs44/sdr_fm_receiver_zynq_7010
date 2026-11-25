@@ -98,15 +98,20 @@ while IFS= read -r line; do
 done < "$REQ"
 
 # ── опции ядра из target-patches ────────────────────────────────────────────
-# Символы Kconfig в target/linux/*/config-6.12 не входят в запрошенный конфиг
+# Символы Kconfig в target/linux/*/config-6.* не входят в запрошенный конфиг
 # OpenWrt, поэтому сверх defconfig их никто не проверяет. При невыполненной
 # зависимости kconfig отбрасывает символ без сообщения об ошибке: звук и NAND
 # исчезают из ядра, а сборка остаётся успешной (образ v25.12.6, журнал
 # 17_boot_log_v25.12.6.log).
-KCONF="$OWRT/target/linux/zynq/config-6.12"
-if [ -f "$KCONF" ]; then
+# Имя файла берём шаблоном: при смене ядра оно станет config-6.18 и т. п.
+KCONF="$(ls "$OWRT/target/linux/zynq"/config-6.* 2>/dev/null | tail -1 || true)"
+if [ -z "$KCONF" ]; then
   echo
-  echo "== опции ядра в config-6.12 =="
+  echo "ОШИБКА: в target/linux/zynq нет config-6.* — цель не найдена или патчи не легли." >&2
+  fail=$((fail + 1))
+else
+  echo
+  echo "== опции ядра в $(basename "$KCONF") =="
   for sym in CONFIG_SOUND CONFIG_SND CONFIG_SND_SOC_ADI_AXI_I2S \
              CONFIG_SND_SIMPLE_CARD CONFIG_MTD_RAW_NAND \
              CONFIG_MTD_NAND_PL35X CONFIG_MTD_UBI CONFIG_UBIFS_FS; do
@@ -115,7 +120,7 @@ if [ -f "$KCONF" ]; then
       printf '  PASS %-32s\n' "$sym"
     else
       fail=$((fail + 1))
-      printf '  FAIL %-32s нет в config-6.12: ядро соберётся без этой возможности\n' "$sym"
+      printf '  FAIL %-32s нет в %s: ядро соберётся без этой возможности\n' "$sym" "$(basename "$KCONF")"
     fi
   done
 fi

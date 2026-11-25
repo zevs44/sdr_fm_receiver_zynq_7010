@@ -218,8 +218,15 @@ jobs:
           # check_patched ловит «патч не лёг», check_content — «лёг, но не то».
           check_patched target/linux/zynq/patches/0003-dts-antminer-s9-pl.patch
           check_patched target/linux/zynq/patches/0004-dts-antminer-s9-nand.patch
-          check_patched target/linux/zynq/config-6.12
           check_patched target/linux/zynq/Makefile
+          # Имя конфига ядра зависит от версии: config-6.12, config-6.18 и т. д.
+          kconf="$(ls target/linux/zynq/config-6.* 2>/dev/null | tail -1 || true)"
+          if [ -z "$kconf" ]; then
+            echo "ОШИБКА: в target/linux/zynq нет config-6.*" >&2
+            failed=1
+          else
+            check_patched "$kconf"
+          fi
           check_content() {
             if grep -q "$2" "$1"; then
               echo "ok  $1 содержит '$2'"
@@ -230,10 +237,12 @@ jobs:
           }
           check_content target/linux/zynq/patches/0003-dts-antminer-s9-pl.patch "fm-radio@43c60000"
           check_content target/linux/zynq/patches/0004-dts-antminer-s9-nand.patch 'label = "uboot_env"'
-          check_content target/linux/zynq/config-6.12 "CONFIG_SOUND=y"
-          check_content target/linux/zynq/config-6.12 "CONFIG_SND_SOC_ADI_AXI_I2S"
-          check_content target/linux/zynq/config-6.12 "CONFIG_MTD_RAW_NAND=y"
-          check_content target/linux/zynq/config-6.12 "CONFIG_MTD_NAND_PL35X=y"
+          if [ -n "$kconf" ]; then
+            check_content "$kconf" "CONFIG_SOUND=y"
+            check_content "$kconf" "CONFIG_SND_SOC_ADI_AXI_I2S"
+            check_content "$kconf" "CONFIG_MTD_RAW_NAND=y"
+            check_content "$kconf" "CONFIG_MTD_NAND_PL35X=y"
+          fi
           check_content target/linux/zynq/Makefile "nand"
 
           git status --short > "$GITHUB_WORKSPACE/patch-status.txt"
@@ -649,7 +658,10 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           RUN_ID: ${{ steps.run.outputs.run_id }}
         run: |
+          # Версия OpenWrt для заголовка — без ведущей «v»: .openwrt-version
+          # хранит тег (v25.12.6), а в тексте нужно «25.12.6».
           openwrt="$(tr -d '[:space:]' < .openwrt-version 2>/dev/null || echo 'неизвестно')"
+          openwrt="${openwrt#v}"
           size="$(wc -c < "$IMG" | tr -d ' ')"
           sha="$(cut -d' ' -f1 artifacts/SHA256SUMS)"
           prev="$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)"

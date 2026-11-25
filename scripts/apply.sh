@@ -24,6 +24,11 @@ VERSION="$(tr -d '[:space:]' < "$HERE/.openwrt-version" 2>/dev/null || echo '')"
 # цель и подцель берутся из конфига, чтобы не дублировать их в скрипте
 TARGET="$(sed -n 's/^CONFIG_TARGET_\([a-z0-9]*\)=y$/\1/p' "$CFG" | head -1)"
 SUBTARGET="$(sed -n 's/^CONFIG_TARGET_[a-z0-9]*_\([a-z0-9]*\)=y$/\1/p' "$CFG" | head -1)"
+if [ -z "$TARGET" ] || [ -z "$SUBTARGET" ]; then
+  echo "ОШИБКА: не удалось определить цель и подцель из $CFG" >&2
+  echo "   Ожидались строки CONFIG_TARGET_<цель>=y и CONFIG_TARGET_<цель>_<подцель>=y." >&2
+  exit 1
+fi
 
 if [ ! -d "$OWRT" ]; then
   echo "ОШИБКА: каталог OpenWrt не найден: $OWRT" >&2
@@ -58,7 +63,7 @@ fi
 
 echo "== 2. файлы для FAT-раздела =="
 mkdir -p "$OWRT/antminer"
-for f in boot.bin u-boot.img uboot_env.bin; do
+for f in boot.bin u-boot.img; do
   if [ -f "$HERE/bootloader/$f" ]; then
     cp "$HERE/bootloader/$f" "$OWRT/antminer/$f"
     echo "   загрузчик: $f ($(wc -c < "$OWRT/antminer/$f") байт)"
@@ -67,6 +72,14 @@ for f in boot.bin u-boot.img uboot_env.bin; do
     exit 1
   fi
 done
+# Окружение необязательно: без него U-Boot работает на значениях по умолчанию,
+# а nand_install проверит наличие файла сам.
+if [ -f "$HERE/bootloader/uboot_env.bin" ]; then
+  cp "$HERE/bootloader/uboot_env.bin" "$OWRT/antminer/uboot_env.bin"
+  echo "   окружение U-Boot: uboot_env.bin ($(wc -c < "$OWRT/antminer/uboot_env.bin") байт)"
+else
+  echo "   ПРЕДУПРЕЖДЕНИЕ: нет bootloader/uboot_env.bin — раздел uboot_env останется пустым"
+fi
 if [ -f "$HERE/bitstream/system.bit.gz" ]; then
   cp "$HERE/bitstream/system.bit.gz" "$OWRT/antminer/system.bit.gz"
   echo "   битстрим: $(wc -c < "$OWRT/antminer/system.bit.gz") байт"

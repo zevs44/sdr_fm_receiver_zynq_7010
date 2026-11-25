@@ -59,6 +59,9 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
   `clk_ignore_unused`.
 - `files/etc/uci-defaults/99_antminer_setup` — первичная настройка при первой
   загрузке: сеть, IPv6, время, MAC и hostname (раздел 3.6).
+- `files/etc/fw_env.config` — где `fw_printenv` ищет окружение U-Boot: раздел
+  NAND `uboot_env` (`/dev/mtd3`, смещение 0, размер 0x80000). Без файла
+  `uboot-envtools` (входит в `DEFAULT_PACKAGES` цели) печатает ошибки в журнал.
 - `.openwrt-version` — единственный источник версии OpenWrt.
 
 ### 3.3 Скрипты
@@ -66,8 +69,9 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 | Скрипт | Назначение |
 |---|---|
 | `scripts/apply.sh` | накладывает патчи (с проверкой), копирует загрузчик/битстрим/`uEnv.txt`, копирует `files/etc` в корневую файловую систему, подключает фид автора, ставит все фиды, убирает дубль `/etc/init.d/mpd` из фида, применяет конфиг и `defconfig` |
-| `scripts/check_config.sh` | сверяет запрошенный конфиг с итоговым (пакеты, которые `defconfig` исключил) и проверяет обязательные опции ядра в `target/linux/zynq/config-6.12` |
-| `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL и разделы NAND в DTB, `/sbin/nand_install`, первичную настройку |
+| `scripts/check_config.sh` | сверяет запрошенный конфиг с итоговым (пакеты, которые `defconfig` исключил) и проверяет обязательные опции ядра в `target/linux/zynq/config-6.*` (имя файла ищется шаблоном — переживает смену версии ядра) |
+| `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL и разделы NAND в DTB, `/sbin/nand_install`, первичную настройку, `/etc/fw_env.config` |
+| `scripts/update_expected_artifacts.sh` | пересчитывает `scripts/expected-artifacts.sha256` по загрузчику, битстриму и `uEnv.txt`; убирает ручное обновление хешей |
 | `scripts/qemu_smoke.sh` | загружает образ в QEMU (`xilinx-zynq-a9`) и ждёт init |
 | `scripts/expected-artifacts.sha256` | контрольные суммы загрузчика, битстрима и `uEnv.txt` |
 

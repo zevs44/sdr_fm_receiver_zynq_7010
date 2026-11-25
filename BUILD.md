@@ -82,6 +82,18 @@ JP1 — PLL bypass, во всех режимах загрузки 0. Значе�
 Правки вносятся в `files/etc/uci-defaults/99_antminer_setup` только до сборки:
 на уже прошитой плате файл удалён, нужна перепрошивка.
 
+### Окружение U-Boot
+
+`/etc/fw_env.config` указывает, где `fw_printenv` ищет окружение: раздел NAND
+`uboot_env` (`/dev/mtd3`, смещение 0, размер 0x80000). Без файла пакет
+`uboot-envtools` при каждой загрузке печатает две ошибки — `fw_loadenv`
+вызывает `fw_printenv` в preinit. Проверка на плате:
+
+```sh
+cat /proc/mtd          # boot, uboot, fpga, uboot_env, kernel, rootfs
+fw_printenv            # без ошибок; до записи NAND значение может быть пустым
+```
+
 ## Требования
 
 - Linux или WSL2 (сборка OpenWrt на Windows не поддерживается).

@@ -230,6 +230,7 @@ if [ -n "$rootfs_off" ]; then
       check_in_rootfs "usr/bin/mympd"
       check_in_rootfs "sbin/nand_install"
       check_in_rootfs "etc/uci-defaults/99_antminer_setup"
+      check_in_rootfs "etc/fw_env.config"
       check_in_rootfs "usr/libexec/rpcd/fmradio"
       check_in_rootfs "etc/init.d/fmradio"
       if grep -qE "/lib/modules/[^/]+/zynq_fm_radio\.ko$" "$TMP/rootfs.list"; then
