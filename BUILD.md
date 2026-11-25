@@ -28,11 +28,13 @@ README. Загрузчик и битстрим — из релиза автор�
 
 ```bash
 lsblk                                   # найти карту, проверить /dev/sdX
-sudo dd if=sdcard-v25.12.6.img.gz of=/dev/sdX bs=4M conv=fsync status=progress
+gunzip -c sdcard-v25.12.6.img.gz | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
 sync
 ```
 
-`dd` понимает `.gz` напрямую.
+`dd` не распаковывает: `gunzip -c` распаковывает образ на лету в канал. Если сначала
+записать на карту сам `.gz`, карта не загрузится. Распакованный образ занимает
+32 165 812 байт; отдельный файл — `gunzip -k sdcard-v25.12.6.img.gz`.
 
 **Windows — Rufus** (<https://rufus.ie>, переносная версия):
 
