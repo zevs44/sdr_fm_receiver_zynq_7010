@@ -1,0 +1,68 @@
+name: 88 manual qemu check
+
+# Ручная перепроверка готового образа в QEMU: берёт артефакт sdcard-* из
+# указанного прогона и запускает scripts/qemu_smoke.sh из текущей ветки.
+# Нужна, когда проверки изменились, а образ пересобирать не требуется:
+# конвейер 01_build.yml не меняется, зависимости его шагов не затрагиваются.
+#
+# Запуск:
+#   gh workflow run 88_manual_qemu_check.yml -f run_id=<ID прогона>
+# Код возврата шага совпадает с кодом qemu_smoke.sh: 0 — PASS, 1 — FAIL.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID прогона с артефактом sdcard-* (02 build завершён успешно)"
+        required: true
+      timeout:
+        description: "Таймаут загрузки в QEMU, секунд"
+        required: false
+        default: "300"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install QEMU and image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-arm u-boot-tools mtools fdisk
+
+      - name: Download image artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts
+          gh run download "${{ inputs.run_id }}" -R "$GITHUB_REPOSITORY" \
+            --pattern 'sdcard-*' --dir artifacts
+          find artifacts -type f -name '*.img.gz' -exec ls -l {} \;
+
+      - name: Boot in QEMU
+        env:
+          QEMU_LOG: serial.log
+        run: |
+          img="$(find artifacts -type f -name '*.img.gz' | head -1)"
+          if [ -z "$img" ]; then
+            echo "ОШИБКА: в артефакте нет *.img.gz" >&2
+            exit 1
+          fi
+          bash scripts/qemu_smoke.sh "$img" "${{ inputs.timeout }}"
+
+      - name: Upload serial log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: manual-qemu-serial-${{ github.run_id }}
+          path: serial.log
+          if-no-files-found: ignore
+          retention-days: 7
