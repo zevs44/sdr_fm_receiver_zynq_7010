@@ -1,0 +1,48 @@
+name: 89 debug artifact
+
+# Разовая диагностика: распаковать образ из указанного прогона и показать
+# фактические права на /myscripts. Не входит в конвейер, запускается вручную.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID прогона, из которого взять артефакт sdcard-*"
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download image artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p art
+          gh run download "${{ inputs.run_id }}" -R "$GITHUB_REPOSITORY" \
+            --pattern 'sdcard-*' --dir art
+          find art -type f -maxdepth 3 | head -20
+
+      - name: Inspect modes
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends squashfs-tools fdisk
+          img="$(find art -name '*.img.gz' | head -1)"
+          gzip -dc "$img" > disk.img
+          off="$(sfdisk -d disk.img | sed -n 's/.*start= *\([0-9]*\).*type= *83.*/\1/p' | head -1)"
+          echo "rootfs offset sectors: $off"
+          unsquashfs -ll -o $((off * 512)) disk.img > listing.txt 2>/dev/null
+          echo "== строки myscripts =="
+          grep -E 'myscripts|run-diag' listing.txt || echo "нет строк"
+          echo "== начало листинга =="
+          head -5 listing.txt
+          echo "== права init-скриптов для сравнения =="
+          grep -E 'etc/init.d/(fmradio|audiosrc)$' listing.txt || true
