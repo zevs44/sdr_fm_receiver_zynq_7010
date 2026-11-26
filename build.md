@@ -141,14 +141,14 @@ Workflow `.github/workflows/01_build.yml` запускается:
 пакете, а доводит проход и печатает **все** сломанные пакеты. Это экономит
 полный прогон (~1,5 ч) на каждый следующий дефект.
 
-`.github/workflows/90_watch_upstream.yml` раз в 6 часов проверяет новые стабильные релизы
+`.github/workflows/81_watch_upstream.yml` раз в 6 часов проверяет новые стабильные релизы
 OpenWrt: если тег новее, чем в `.openwrt-version`, **сначала проверяет, что патч-слой на него
 ложится** (клон тега + `git apply --check` каждого патча), и только потом обновляет файл и
 запускает сборку. Если патч не ложится — версия не закрепляется, workflow завершается ошибкой с сообщением:
 `.openwrt-version` не укажет на сломанную версию.
 
 `.github/workflows/80_cleanup_runs.yml` раз в сутки удаляет старые **успешные** прогоны
-(по умолчанию — `90_watch_upstream.yml`, старше 10 дней), чтобы история Actions не росла
+(по умолчанию — `81_watch_upstream.yml`, старше 10 дней), чтобы история Actions не росла
 бесконечно. Неуспешные прогоны не удаляются никогда: это история отладки. Параметры
 (`workflow`, `older_than_days`, `dry_run`) задаются при ручном запуске; `workflow: all`
 чистит все workflow репозитория, включая собственные прошлые прогоны чистки (текущий
@@ -321,9 +321,9 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 | Префикс артефакта | `01_build.yml` → `env.ARTIFACT_PREFIX` | `sdcard` | косметика |
 | Таймаут сборки | `01_build.yml` → `timeout-minutes` | `330` | если сборка стала дольше |
 | Параллельность make | `01_build.yml` → `env.DEFAULT_JOBS` | `4` (не больше `nproc`) | при OOM — снижать; при большом раннере — поднимать |
-| Репозиторий для слежения | `90_watch_upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
-| Файл версии | `90_watch_upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
-| Фильтр стабильных тегов | `90_watch_upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
+| Репозиторий для слежения | `81_watch_upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
+| Файл версии | `81_watch_upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
+| Фильтр стабильных тегов | `81_watch_upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
 | Цель и устройство | `configs/zynq_antminer_s9.config` | `CONFIG_TARGET_zynq*`, `..._DEVICE_bitmain_zynq-antminer-s9` | при смене платы |
 
 Порядок перехода:

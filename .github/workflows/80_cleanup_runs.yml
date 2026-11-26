@@ -11,7 +11,7 @@ name: 80 cleanup runs
 #   - неуспешные прогоны не удаляются никогда — это история отладки;
 #   - текущий прогон не удаляется никогда (исключён по id);
 #   - свои прошлые прогоны чистятся наравне с остальными — но только когда
-#     выбран режим all; по умолчанию цель — 90_watch_upstream.yml.
+#     выбран режим all; по умолчанию цель — 81_watch_upstream.yml.
 #
 # Удаление прогона удаляет и его артефакты.
 
@@ -23,7 +23,7 @@ on:
       workflow:
         description: "Файл workflow (all = все workflow репозитория)"
         required: false
-        default: "90_watch_upstream.yml"
+        default: "81_watch_upstream.yml"
       older_than_days:
         description: "Удалять успешные прогоны старше N дней"
         required: false
@@ -43,7 +43,7 @@ concurrency:
 
 env:
   # для schedule-запуска inputs пусты — берём значения по умолчанию
-  TARGET_WORKFLOW: ${{ inputs.workflow || '90_watch_upstream.yml' }}
+  TARGET_WORKFLOW: ${{ inputs.workflow || '81_watch_upstream.yml' }}
   OLDER_THAN_DAYS: ${{ inputs.older_than_days || '10' }}
   DRY_RUN: ${{ inputs.dry_run || 'false' }}
   # сколько последних прогонов просматривать за один запуск; если история

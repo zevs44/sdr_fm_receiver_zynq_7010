@@ -1,4 +1,4 @@
-name: 88 manual qemu check
+name: 10 manual qemu check
 
 # Ручная перепроверка готового образа в QEMU: берёт артефакт sdcard-* из
 # указанного прогона и запускает scripts/qemu_smoke.sh из текущей ветки.
@@ -6,7 +6,7 @@ name: 88 manual qemu check
 # конвейер 01_build.yml не меняется, зависимости его шагов не затрагиваются.
 #
 # Запуск:
-#   gh workflow run 88_manual_qemu_check.yml -f run_id=<ID прогона>
+#   gh workflow run 10_manual_qemu_check.yml -f run_id=<ID прогона>
 # Код возврата шага совпадает с кодом qemu_smoke.sh: 0 — PASS, 1 — FAIL.
 
 on:
