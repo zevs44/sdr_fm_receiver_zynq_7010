@@ -232,14 +232,20 @@ if [ -n "$rootfs_off" ]; then
       check_in_rootfs "etc/uci-defaults/99_antminer_setup"
       check_in_rootfs "etc/fw_env.config"
       check_in_rootfs "etc/uci-defaults/91-board-scripts"
-      check_in_rootfs "myscripts/run-diag-board"
-      # Каталог пользовательских скриптов должен быть доступен на запись:
-      # права видны только в подробном листинге (-ll).
+      check_in_rootfs "myscripts/run-diag-board.sh"
+      # Каталог пользовательских скриптов и сам скрипт должны быть доступны
+      # на запись и запуск: права видны только в подробном листинге (-ll).
       if unsquashfs -ll -o "$rootfs_off" "$IMG" 2>/dev/null |
          grep -qE '^drwxrwxrwx .* myscripts$'; then
         ok "rootfs: /myscripts с правами 777"
       else
         bad "rootfs: /myscripts без прав 777"
+      fi
+      if unsquashfs -ll -o "$rootfs_off" "$IMG" 2>/dev/null |
+         grep -qE '^-rwxrwxrwx .* run-diag-board\.sh$'; then
+        ok "rootfs: run-diag-board.sh с правами 777"
+      else
+        bad "rootfs: run-diag-board.sh без прав 777"
       fi
       check_in_rootfs "usr/libexec/rpcd/fmradio"
       check_in_rootfs "etc/init.d/fmradio"

@@ -141,10 +141,10 @@ fi
 # Диагностика тем же скриптом, что запускает пользователь на плате:
 # профиль qemu пропускает проверки, для которых нужны FPGA и NAND.
 if [ "$booted" -eq 1 ]; then
-  echo "== запуск /myscripts/run-diag-board (профиль qemu) =="
+  echo "== запуск /myscripts/run-diag-board.sh (профиль qemu) =="
   printf '\n' >&3
   sleep 1
-  printf '/myscripts/run-diag-board --profile qemu\n' >&3
+  printf '/myscripts/run-diag-board.sh --profile qemu\n' >&3
   wait_log 'RESULT: (PASS|FAIL)' 180 || true
 fi
 
