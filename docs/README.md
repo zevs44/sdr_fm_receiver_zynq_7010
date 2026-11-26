@@ -11,7 +11,7 @@ Reference material for this board and this design. Everything here describes the
 | [rebuild-bitstream.ru.md](rebuild-bitstream.ru.md) | Русский | то же на русском |
 | [nand-install.md](nand-install.md) | English | writing OpenWrt from the SD card into NAND: safety model, usage, limits |
 | [nand-install.ru.md](nand-install.ru.md) | Русский | то же на русском |
-| [board-check.md](board-check.md) | English | board diagnostics: `/myscripts`, `run-diag-board`, launch over UART, SSH and LuCI, log transfer, QEMU profile |
+| [board-check.md](board-check.md) | English | board diagnostics: `/myscripts`, `run-diag-board.sh`, launch over UART, SSH and LuCI, log transfer, QEMU profile |
 | [board-check.ru.md](board-check.ru.md) | Русский | то же на русском |
 
 Diagrams live in `docs/img/`. They are self-contained SVG files: no external fonts,
