@@ -6,7 +6,7 @@
 var callGet = rpc.declare({
 	object: 'luci.audiosrc',
 	method: 'get',
-	expect: { source: 'radio' }
+	expect: { source: 'mympd' }
 });
 
 var callSet = rpc.declare({

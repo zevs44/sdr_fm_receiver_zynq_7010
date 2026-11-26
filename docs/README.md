@@ -42,13 +42,14 @@ original is deleted: `vivado_2023.2/`, all 19 packages and the READMEs stay in
 place. Everything that needed no change is taken from the author as is — his
 build has been verified on the board.
 
-**Three files are changed** (necessary adaptations only):
+**Four files are changed** (necessary adaptations only):
 
 | File | Change | Why |
 |---|---|---|
 | `packages/csdr/Makefile` | version `2019-02-27` -> `2019.02.27` | apk in OpenWrt 25.12 rejects versions with several dashes |
 | `packages/kmod-zynq-fm-radio/src/zynq_fm_radio.c` | `no_llseek` -> `ZYNQ_FM_NO_LLSEEK` macro | the function was removed in kernel 6.0 |
 | `packages/luci-app-mympd/Makefile` | comment about the `/etc/init.d/mpd` conflict | apk treats the conflict as an error, not a warning |
+| `packages/luci-app-audiosrc/` (config, init script, rpcd, view) | default audio source `mympd` instead of `radio` | playback from myMPD is the main scenario on this board; the user's own choice is kept, only the initial value changes |
 
 **Added** (a build layer unrelated to the author's design): OpenWrt patches,
 configuration, CI, documentation, the prebuilt bootloader and bitstream from

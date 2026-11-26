@@ -1,2 +1,2 @@
 config audiosrc 'settings'
-	option source 'radio'
+	option source 'mympd'

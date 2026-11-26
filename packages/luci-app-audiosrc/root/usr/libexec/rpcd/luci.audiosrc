@@ -10,7 +10,7 @@ ubus_get() {
 	local uci_source hw_val hw_idx hw_source
 
 	uci_source="$(uci -q get audiosrc.settings.source)"
-	[ -n "$uci_source" ] || uci_source="radio"
+	[ -n "$uci_source" ] || uci_source="mympd"
 
 	# Регистр могли поменять в обход плагина (devmem2 и т.п.) - UCI тогда
 	# устарел. Читаем железо напрямую; на UCI откатываемся, только если
@@ -62,7 +62,7 @@ ubus_set() {
 
 case "$1" in
 	list)
-		echo '{ "get": {}, "set": { "source": "radio" } }'
+		echo '{ "get": {}, "set": { "source": "mympd" } }'
 		;;
 	call)
 		case "$2" in

@@ -21,7 +21,7 @@ start() {
 
 	local source idx
 	source="$(uci -q get audiosrc.settings.source)"
-	[ -n "$source" ] || source="radio"
+	[ -n "$source" ] || source="mympd"
 
 	idx="$(idx_for "$source")"
 	[ -n "$idx" ] || idx=0
