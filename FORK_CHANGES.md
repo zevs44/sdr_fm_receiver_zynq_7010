@@ -71,9 +71,9 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 |---|---|
 | `scripts/apply.sh` | накладывает патчи (с проверкой), копирует загрузчик/битстрим/`uEnv.txt`, копирует `files/etc` в корневую файловую систему, подключает фид автора, ставит все фиды, убирает дубль `/etc/init.d/mpd` из фида, применяет конфиг и `defconfig` |
 | `scripts/check_config.sh` | сверяет запрошенный конфиг с итоговым (пакеты, которые `defconfig` исключил) и проверяет обязательные опции ядра в `target/linux/zynq/config-6.*` (имя файла ищется шаблоном — переживает смену версии ядра) |
-| `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL и разделы NAND в DTB, `/sbin/nand_install`, `/myscripts/run-diag-board` и права `777` на `/myscripts`, первичную настройку, `/etc/fw_env.config` |
+| `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL и разделы NAND в DTB, `/sbin/nand_install`, `/myscripts/run-diag-board.sh` и права `777` на `/myscripts`, первичную настройку, `/etc/fw_env.config` |
 | `scripts/update_expected_artifacts.sh` | пересчитывает `scripts/expected-artifacts.sha256` по загрузчику, битстриму и `uEnv.txt`; убирает ручное обновление хешей |
-| `scripts/qemu_smoke.sh` | загружает образ в QEMU (`xilinx-zynq-a9`), ждёт init, затем через консоль запускает `/myscripts/run-diag-board --profile qemu` и требует `RESULT: PASS` |
+| `scripts/qemu_smoke.sh` | загружает образ в QEMU (`xilinx-zynq-a9`), ждёт init, затем через консоль запускает `/myscripts/run-diag-board.sh --profile qemu` и требует `RESULT: PASS` |
 | `scripts/expected-artifacts.sha256` | контрольные суммы загрузчика, битстрима и `uEnv.txt` |
 
 ### 3.4 CI (GitHub Actions)
@@ -112,10 +112,13 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 ### `board-scripts`
 
 Каталог `/myscripts` (права `777`) и диагностический скрипт
-`/myscripts/run-diag-board`.
+`/myscripts/run-diag-board.sh` (права `777`).
 
-- Каталог создаётся пакетом при установке и повторно проверяется в
-  `/etc/uci-defaults/91-board-scripts` — пакет может встать поверх старого образа.
+- Каталог создаётся только если его нет; `/etc/uci-defaults/91-board-scripts`
+  повторно выставляет права — пакет может встать поверх старого образа.
+- **Установка только добавляющая.** `/myscripts` может существовать заранее и
+  содержать пользовательские скрипты и автоматизацию: пакет пишет один свой файл
+  и не удаляет, не очищает и не перезаписывает чужие.
 - Скрипт один для платы и для конвейера: профиль по умолчанию `board`, в сборке
   запускается `--profile qemu`. Профиль `qemu` помечает проверки FPGA и NAND как
   `SKIP`, поэтому QEMU не валит образ из-за отсутствующего железа.

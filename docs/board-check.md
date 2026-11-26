@@ -1,4 +1,4 @@
-# Board check: the `run-diag-board` diagnostics script
+# Board check: the `run-diag-board.sh` diagnostics script
 
 The script collects the state of the Antminer S9 board (Zynq-7010) into a single
 log: the system, memory, the user script directory, the device tree, the radio
@@ -12,11 +12,16 @@ which skips the checks that need the FPGA and NAND.
 ## Requirements
 
 - An image built after 2026-11-26: it contains the `board-scripts` package,
-  the `/myscripts` directory with mode `777` and the `/myscripts/run-diag-board`
+  the `/myscripts` directory with mode `777` and the `/myscripts/run-diag-board.sh`
   script.
 - For the LuCI launch — `luci-app-commands` (included in the image).
 - Root rights: the script reads `/proc/mtd`, runs `fw_printenv` and
   `nand_install --dry-run`.
+
+The `/myscripts` directory and the `run-diag-board.sh` script have mode `777`.
+If the directory already existed with your own files, the installation leaves them
+alone: the `board-scripts` package writes only its own `run-diag-board.sh` and
+never clears the directory.
 
 ## Checks at a glance
 
@@ -26,7 +31,7 @@ which skips the checks that need the FPGA and NAND.
 | System | `/rom` mounted as `squashfs` | read-only root with an overlay | yes |
 | System | `MemTotal` at least 400 000 kB | 512 MB or 1 GB | yes |
 | `/myscripts` | directory exists, mode `777` | a user may write there | yes |
-| `/myscripts` | `run-diag-board` present and executable | the script ships in the image | yes |
+| `/myscripts` | `run-diag-board.sh` present, mode `777` | the script ships in the image | yes |
 | Device tree | nodes `axi_i2s_adi@43c00000`, `fm-radio@43c60000`, `sound`, `audio_clock` | addresses match `design_1.bd` | yes |
 | Device tree | six NAND partition labels | `boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs` | yes |
 | Device tree | no `earlyprintk` in `/proc/cmdline` | the spare parameter is gone | yes |
@@ -47,7 +52,7 @@ which skips the checks that need the FPGA and NAND.
 ### Over UART
 
 ```sh
-/myscripts/run-diag-board
+/myscripts/run-diag-board.sh
 ```
 
 The output goes to the console and to `/tmp/run-diag-board.log` at the same time.
@@ -73,7 +78,7 @@ Expected: `DRAM: … 1 GiB` or `512 MiB`; in `fatls` — six files including
 ### Over SSH
 
 ```sh
-ssh root@<board-address> '/myscripts/run-diag-board --log /tmp/run-diag-board.log'
+ssh root@<board-address> '/myscripts/run-diag-board.sh --log /tmp/run-diag-board.log'
 scp root@<board-address>:/tmp/run-diag-board.log ./run-diag-board.log
 ```
 
@@ -139,6 +144,7 @@ separate check set for the pipeline.
 
 ## Updating
 
-A new check is added to `packages/board-scripts/files/run-diag-board` together
-with a row in the table above. Checks that apply to the board only must report
-`SKIP` in the `qemu` profile; otherwise every build starts failing.
+A new check is added to `packages/board-scripts/files/run-diag-board.sh` together
+with a row in the table above. Scripts in the directory use the `.sh` suffix and
+mode `777`. Checks that apply to the board only must report `SKIP` in the `qemu`
+profile; otherwise every build starts failing.
