@@ -98,16 +98,15 @@ if [ -d "$HERE/files/etc" ]; then
   echo "   files/etc: $(( $(find "$OWRT/files/etc" -type f | wc -l) )) файл(ов) в корневой ФС"
 fi
 
-# /myscripts: каталог и скрипты с правами 0777. Права выставляются здесь,
-# потому что упаковщик пакетов нормализует режимы, а оверлей files/
-# копируется в корень с сохранением прав. Установка только добавляющая:
+# /myscripts: файлы кладутся в образ, а права ставит uci-defaults при первой
+# загрузке (files/etc/uci-defaults/91-board-scripts). Права в образе не
+# выставляются намеренно: разбор режимов на этапе сборки хрупок, а рантайм-права
+# проверяет сама диагностика и шаг 03 qemu smoke. Установка только добавляющая:
 # файлы пользователя в /myscripts не удаляются.
 if [ -d "$HERE/files/myscripts" ]; then
   mkdir -p "$OWRT/files/myscripts"
   cp -a "$HERE/files/myscripts/." "$OWRT/files/myscripts/"
-  chmod 0777 "$OWRT/files/myscripts"
-  find "$OWRT/files/myscripts" -type f -name '*.sh' -exec chmod 0777 {} \;
-  echo "   files/myscripts: $(( $(find "$OWRT/files/myscripts" -type f | wc -l) )) скрипт(ов), права 0777"
+  echo "   files/myscripts: $(( $(find "$OWRT/files/myscripts" -type f | wc -l) )) скрипт(ов) в образе; права ставит uci-defaults"
 fi
 
 echo "== 3. feeds автора =="

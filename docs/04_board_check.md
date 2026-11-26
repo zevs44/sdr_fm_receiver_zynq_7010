@@ -11,16 +11,17 @@ which skips the checks that need the FPGA and NAND.
 
 ## Requirements
 
-- An image built after 2026-11-26: the build layer ships `/myscripts` with mode
-  `777` and the `/myscripts/run-diag-board.sh` script through the `files/` overlay.
+- An image built after 2026-11-26: the `files/` overlay ships the `/myscripts`
+  directory and the `/myscripts/run-diag-board.sh` script.
 - For the LuCI launch — `luci-app-commands` (included in the image).
 - Root rights: the script reads `/proc/mtd`, runs `fw_printenv` and
   `nand_install --dry-run`.
 
-The `/myscripts` directory and the `run-diag-board.sh` script have mode `777`.
-If the directory already existed with your own files, the installation leaves them
-alone: the image ships only its own `run-diag-board.sh` and never clears the
-directory.
+Mode `777` on the directory and the script is set by `uci-defaults` on the first
+boot (`/etc/uci-defaults/91-board-scripts`). If the modes are missing, run
+`chmod 777 /myscripts /myscripts/run-diag-board.sh`. If the directory already
+existed with your own files, the installation leaves them alone: the image ships
+only its own `run-diag-board.sh` and never clears the directory.
 
 ## Checks at a glance
 

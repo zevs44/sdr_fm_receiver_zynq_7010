@@ -64,10 +64,11 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
   NAND `uboot_env` (`/dev/mtd3`, смещение 0, размер 0x80000). Без файла
   `uboot-envtools` (входит в `DEFAULT_PACKAGES` цели) печатает ошибки в журнал.
 - `files/myscripts/run-diag-board.sh` — диагностика платы в каталоге
-  `/myscripts`. Каталог и скрипт получают права `0777`: их выставляет
-  `scripts/apply.sh`, потому что упаковщик пакетов нормализует режимы, а оверлей
-  `files/` копируется в корень с сохранением прав. Установка только добавляющая:
-  файлы пользователя в `/myscripts` не удаляются.
+  `/myscripts`. Файлы кладутся в образ оверлеем `files/`; права `0777` на
+  каталог и скрипт ставит uci-defaults при первой загрузке, в образе они не
+  выставляются (разбор режимов на сборке хрупок, а в рантайме права проверяет
+  сама диагностика). Если uci-defaults не сработал — `chmod 777 /myscripts` на
+  плате. Установка только добавляющая: файлы пользователя не удаляются.
 - `files/etc/uci-defaults/91-board-scripts` — кнопки `DIAG: проверка платы`
   в LuCI и повторная проверка прав каталога.
 - `.openwrt-version` — единственный источник версии OpenWrt.
@@ -78,7 +79,7 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 |---|---|
 | `scripts/apply.sh` | накладывает патчи (с проверкой), копирует загрузчик/битстрим/`uEnv.txt`, копирует `files/etc` в корневую файловую систему, подключает фид автора, ставит все фиды, убирает дубль `/etc/init.d/mpd` из фида, применяет конфиг и `defconfig` |
 | `scripts/check_config.sh` | сверяет запрошенный конфиг с итоговым (пакеты, которые `defconfig` исключил) и проверяет обязательные опции ядра в `target/linux/zynq/config-6.*` (имя файла ищется шаблоном — переживает смену версии ядра) |
-| `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL и разделы NAND в DTB, `/sbin/nand_install`, `/myscripts/run-diag-board.sh` и права `777` на `/myscripts`, первичную настройку, `/etc/fw_env.config` |
+| `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL и разделы NAND в DTB, `/sbin/nand_install`, `/myscripts/run-diag-board.sh`, первичную настройку, `/etc/fw_env.config` |
 | `scripts/update_expected_artifacts.sh` | пересчитывает `scripts/expected-artifacts.sha256` по загрузчику, битстриму и `uEnv.txt`; убирает ручное обновление хешей |
 | `scripts/qemu_smoke.sh` | загружает образ в QEMU (`xilinx-zynq-a9`), ждёт init, затем через консоль запускает `/myscripts/run-diag-board.sh --profile qemu` и требует `RESULT: PASS` |
 | `scripts/expected-artifacts.sha256` | контрольные суммы загрузчика, битстрима и `uEnv.txt` |
