@@ -46,10 +46,16 @@ truncate -s "$size" "$WORK/disk.img"
 echo "   размер для QEMU: $size байт"
 
 echo "== поиск FAT-раздела =="
+# Номер корневого раздела не зашит: он берётся из разметки образа, чтобы
+# проверка пережила смену раскладки (root= в командной строке ядра).
 fat_off=""
+root_part=""
+part_no=0
 while read -r start type; do
+  part_no=$((part_no + 1))
   case "$type" in
-    c|e|0c|0e) fat_off=$((start * 512)) ;;
+    b|c|e|0b|0c|0e|ef) fat_off=$((start * 512)) ;;
+    83) root_part="$part_no" ;;
   esac
 done < <(sfdisk -d "$WORK/disk.img" 2>/dev/null \
          | sed -n 's/.*start= *\([0-9]*\), *size= *[0-9]*, *type= *\([0-9a-fA-F]*\).*/\1 \2/p')
@@ -57,7 +63,8 @@ if [ -z "$fat_off" ]; then
   echo "ОШИБКА: FAT-раздел не найден" >&2
   exit 1
 fi
-echo "   FAT по смещению $fat_off"
+[ -n "$root_part" ] || root_part=2
+echo "   FAT по смещению $fat_off, корневой раздел — №$root_part"
 
 echo "== извлечение fit.itb =="
 export MTOOLS_SKIP_CHECK=1
@@ -78,6 +85,19 @@ didx="$(fit_index "Flat Device Tree")"
 [ -n "$kidx" ] || kidx=0
 [ -n "$didx" ] || didx=1
 echo "   образы FIT: ядро #$kidx, DTB #$didx"
+
+# Адрес загрузки ядра берём из FIT: QEMU для arm32 ставит PC по заголовку
+# uImage. Прежняя сборка линкует ядро на 0x8000, но при смене конфигурации
+# адрес может измениться — тогда зашитое значение сломает загрузку.
+fit_field() {
+  awk -v idx="$1" -v key="$2" '
+    /^ *Image [0-9]+/ { cur=$2; sub(/[^0-9].*/, "", cur); next }
+    cur == idx && index($0, key ":") { sub(".*" key ": *", ""); print; exit }
+  ' "$WORK/fit.list"
+}
+load_addr="$(fit_field "$kidx" "Load Address")"
+[ -n "$load_addr" ] || load_addr="0x8000"
+echo "   адрес загрузки ядра: $load_addr"
 dumpimage -T flat_dt -p "$kidx" -o "$WORK/kernel.gz" "$WORK/fit.itb" >/dev/null
 dumpimage -T flat_dt -p "$didx" -o "$WORK/board.dtb" "$WORK/fit.itb" >/dev/null
 if [ "$(head -c2 "$WORK/kernel.gz" | od -An -tx1 | tr -d ' \n')" = "1f8b" ]; then
@@ -87,12 +107,12 @@ else
 fi
 echo "   ядро: $(wc -c < "$WORK/Image") байт, DTB: $(wc -c < "$WORK/board.dtb") байт"
 
-# QEMU для arm32 грузит голый Image по 0x10000, а ядро слинковано на 0x8000
-# (так и записано в FIT). Заворачиваем Image в uImage с явными адресами —
+# QEMU для arm32 грузит голый Image по 0x10000, а ядро слинковано по адресу
+# из FIT (обычно 0x8000). Заворачиваем Image в uImage с явными адресами —
 # QEMU читает их из заголовка и ставит PC правильно.
-mkimage -A arm -O linux -T kernel -C none -a 0x8000 -e 0x8000 \
+mkimage -A arm -O linux -T kernel -C none -a "$load_addr" -e "$load_addr" \
         -n "openwrt-qemu-smoke" -d "$WORK/Image" "$WORK/kernel.uImage" >/dev/null
-echo "   uImage: $(wc -c < "$WORK/kernel.uImage") байт (load/entry 0x8000)"
+echo "   uImage: $(wc -c < "$WORK/kernel.uImage") байт (load/entry $load_addr)"
 
 echo "== загрузка в QEMU (таймаут ${TIMEOUT}s) =="
 # Консоль платы — ttyPS0 = serial@e0001000 = второй UART QEMU (serial_hd(1)),
@@ -110,7 +130,7 @@ timeout "$TIMEOUT" qemu-system-arm \
   -M xilinx-zynq-a9 -m 512 -display none -monitor none \
   -serial null -serial stdio \
   -kernel "$WORK/kernel.uImage" -dtb "$WORK/board.dtb" \
-  -append "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait" \
+  -append "console=ttyPS0,115200 root=/dev/mmcblk0p${root_part} rw rootwait" \
   -drive "file=$WORK/disk.img,format=raw,if=sd" \
   < "$FIFO" > "$WORK/serial.log" 2>&1 &
 QPID=$!

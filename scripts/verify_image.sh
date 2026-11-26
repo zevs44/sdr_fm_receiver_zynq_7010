@@ -94,7 +94,7 @@ for p in "${PARTS[@]:-}"; do
   read -r start size type <<< "$p"
   bytes=$((size * 512))
   case "$type" in
-    c | e | 0c | 0e) fat_off=$((start * 512)); fat_bytes=$bytes ;;
+    b | c | e | 0b | 0c | 0e | ef) fat_off=$((start * 512)); fat_bytes=$bytes ;;
     83) rootfs_off=$((start * 512)); rootfs_bytes=$bytes ;;
   esac
 done
@@ -235,17 +235,22 @@ if [ -n "$rootfs_off" ]; then
       check_in_rootfs "myscripts/run-diag-board.sh"
       # Каталог пользовательских скриптов и сам скрипт должны быть доступны
       # на запись и запуск: права видны только в подробном листинге (-ll).
-      if unsquashfs -ll -o "$rootfs_off" "$IMG" 2>/dev/null |
-         grep -qE '^drwxrwxrwx .* myscripts$'; then
-        ok "rootfs: /myscripts с правами 777"
+      # В старых squashfs-tools флага нет — тогда проверка пропускается,
+      # а не валит образ по причине версии утилиты.
+      if unsquashfs -ll -o "$rootfs_off" "$IMG" > "$TMP/rootfs.ll" 2>/dev/null &&
+         [ -s "$TMP/rootfs.ll" ]; then
+        if grep -qE '^drwxrwxrwx .* myscripts$' "$TMP/rootfs.ll"; then
+          ok "rootfs: /myscripts с правами 777"
+        else
+          bad "rootfs: /myscripts без прав 777"
+        fi
+        if grep -qE '^-rwxrwxrwx .* run-diag-board\.sh$' "$TMP/rootfs.ll"; then
+          ok "rootfs: run-diag-board.sh с правами 777"
+        else
+          bad "rootfs: run-diag-board.sh без прав 777"
+        fi
       else
-        bad "rootfs: /myscripts без прав 777"
-      fi
-      if unsquashfs -ll -o "$rootfs_off" "$IMG" 2>/dev/null |
-         grep -qE '^-rwxrwxrwx .* run-diag-board\.sh$'; then
-        ok "rootfs: run-diag-board.sh с правами 777"
-      else
-        bad "rootfs: run-diag-board.sh без прав 777"
+        skipped "права /myscripts: unsquashfs без -ll или листинг пуст"
       fi
       check_in_rootfs "usr/libexec/rpcd/fmradio"
       check_in_rootfs "etc/init.d/fmradio"
