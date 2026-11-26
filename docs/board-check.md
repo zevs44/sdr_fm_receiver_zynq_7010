@@ -11,17 +11,16 @@ which skips the checks that need the FPGA and NAND.
 
 ## Requirements
 
-- An image built after 2026-11-26: it contains the `board-scripts` package,
-  the `/myscripts` directory with mode `777` and the `/myscripts/run-diag-board.sh`
-  script.
+- An image built after 2026-11-26: the build layer ships `/myscripts` with mode
+  `777` and the `/myscripts/run-diag-board.sh` script through the `files/` overlay.
 - For the LuCI launch — `luci-app-commands` (included in the image).
 - Root rights: the script reads `/proc/mtd`, runs `fw_printenv` and
   `nand_install --dry-run`.
 
 The `/myscripts` directory and the `run-diag-board.sh` script have mode `777`.
 If the directory already existed with your own files, the installation leaves them
-alone: the `board-scripts` package writes only its own `run-diag-board.sh` and
-never clears the directory.
+alone: the image ships only its own `run-diag-board.sh` and never clears the
+directory.
 
 ## Checks at a glance
 
@@ -144,7 +143,7 @@ separate check set for the pipeline.
 
 ## Updating
 
-A new check is added to `packages/board-scripts/files/run-diag-board.sh` together
+A new check is added to `files/myscripts/run-diag-board.sh` together
 with a row in the table above. Scripts in the directory use the `.sh` suffix and
 mode `777`. Checks that apply to the board only must report `SKIP` in the `qemu`
 profile; otherwise every build starts failing.

@@ -89,13 +89,25 @@ fi
 cp "$HERE/files/uEnv.txt" "$OWRT/antminer/uEnv.txt"
 echo "   uEnv.txt: скопирован"
 
-# Файлы корневой системы (первичная настройка через uci-defaults).
-# Кладём только подкаталог etc: files/uEnv.txt нужен в FAT, а не в корне.
+# Файлы корневой системы: первичная настройка и пользовательские скрипты.
+# Кладём подкаталоги etc и myscripts: files/uEnv.txt нужен в FAT, а не в корне.
 if [ -d "$HERE/files/etc" ]; then
   mkdir -p "$OWRT/files/etc"
   cp -a "$HERE/files/etc/." "$OWRT/files/etc/"
   find "$OWRT/files/etc/uci-defaults" -type f -exec chmod 755 {} \; 2>/dev/null || true
   echo "   files/etc: $(( $(find "$OWRT/files/etc" -type f | wc -l) )) файл(ов) в корневой ФС"
+fi
+
+# /myscripts: каталог и скрипты с правами 0777. Права выставляются здесь,
+# потому что упаковщик пакетов нормализует режимы, а оверлей files/
+# копируется в корень с сохранением прав. Установка только добавляющая:
+# файлы пользователя в /myscripts не удаляются.
+if [ -d "$HERE/files/myscripts" ]; then
+  mkdir -p "$OWRT/files/myscripts"
+  cp -a "$HERE/files/myscripts/." "$OWRT/files/myscripts/"
+  chmod 0777 "$OWRT/files/myscripts"
+  find "$OWRT/files/myscripts" -type f -name '*.sh' -exec chmod 0777 {} \;
+  echo "   files/myscripts: $(( $(find "$OWRT/files/myscripts" -type f | wc -l) )) скрипт(ов), права 0777"
 fi
 
 echo "== 3. feeds автора =="

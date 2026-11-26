@@ -54,8 +54,7 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 
 - `configs/zynq_antminer_s9.config` — цель `zynq/generic`, устройство
   `bitmain_zynq-antminer-s9`, squashfs, пакеты автора и необходимые дополнения
-  (LuCI с темой и TLS, `i2c-tools`, `mympd`, `nand-install`, `board-scripts`,
-  утилиты mtd/ubi).
+  (LuCI с темой и TLS, `i2c-tools`, `mympd`, `nand-install`, утилиты mtd/ubi).
 - `files/uEnv.txt` — загрузочное окружение U-Boot: `fpga loadb` и
   `clk_ignore_unused`.
 - `files/etc/uci-defaults/99_antminer_setup` — первичная настройка при первой
@@ -63,6 +62,13 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 - `files/etc/fw_env.config` — где `fw_printenv` ищет окружение U-Boot: раздел
   NAND `uboot_env` (`/dev/mtd3`, смещение 0, размер 0x80000). Без файла
   `uboot-envtools` (входит в `DEFAULT_PACKAGES` цели) печатает ошибки в журнал.
+- `files/myscripts/run-diag-board.sh` — диагностика платы в каталоге
+  `/myscripts`. Каталог и скрипт получают права `0777`: их выставляет
+  `scripts/apply.sh`, потому что упаковщик пакетов нормализует режимы, а оверлей
+  `files/` копируется в корень с сохранением прав. Установка только добавляющая:
+  файлы пользователя в `/myscripts` не удаляются.
+- `files/etc/uci-defaults/91-board-scripts` — кнопки `DIAG: проверка платы`
+  в LuCI и повторная проверка прав каталога.
 - `.openwrt-version` — единственный источник версии OpenWrt.
 
 ### 3.3 Скрипты
@@ -108,25 +114,6 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 `cat /etc/antminer-mac`, `ip -4 addr show eth0`.
 
 ## 4. Добавленные пакеты
-
-### `board-scripts`
-
-Каталог `/myscripts` (права `777`) и диагностический скрипт
-`/myscripts/run-diag-board.sh` (права `777`).
-
-- Каталог создаётся только если его нет; `/etc/uci-defaults/91-board-scripts`
-  повторно выставляет права — пакет может встать поверх старого образа.
-- **Установка только добавляющая.** `/myscripts` может существовать заранее и
-  содержать пользовательские скрипты и автоматизацию: пакет пишет один свой файл
-  и не удаляет, не очищает и не перезаписывает чужие.
-- Скрипт один для платы и для конвейера: профиль по умолчанию `board`, в сборке
-  запускается `--profile qemu`. Профиль `qemu` помечает проверки FPGA и NAND как
-  `SKIP`, поэтому QEMU не валит образ из-за отсутствующего железа.
-- Вывод идёт в консоль и в файл (`--log`, по умолчанию `/tmp/run-diag-board.log`).
-- Итог — строки `TOTAL pass=N fail=N skip=N` и `RESULT: PASS|FAIL`; шаг
-  `03 qemu smoke` завершается ошибкой без `RESULT: PASS`.
-- Две кнопки в LuCI: `DIAG: проверка платы` и `DIAG: проверка платы со звуком`.
-- Описание и таблица проверок — `docs/board-check.ru.md` и `docs/board-check.md`.
 
 ### `nand-install`
 
