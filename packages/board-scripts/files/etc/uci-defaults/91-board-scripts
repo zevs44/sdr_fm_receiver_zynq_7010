@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# Подготовка каталога /myscripts и кнопок диагностики в LuCI.
+# Выполняется один раз при первой загрузке; повторный запуск ничего не меняет.
+#
+# Каталог создаёт пакет board-scripts; здесь проверяется режим — пакет мог
+# быть установлен поверх старого образа, где каталога ещё не было.
+
+[ -d /myscripts ] || mkdir -p /myscripts
+chmod 0777 /myscripts 2>/dev/null || true
+
+[ -x /myscripts/run-diag-board ] || exit 0
+
+if uci -q show luci 2>/dev/null | grep -qF "DIAG: проверка платы"; then
+	exit 0
+fi
+
+uci -q add luci command >/dev/null 2>&1 || exit 0
+uci -q set luci.@command[-1].name='DIAG: проверка платы'
+uci -q set luci.@command[-1].command='/myscripts/run-diag-board --log /tmp/run-diag-board.log'
+
+uci -q add luci command >/dev/null 2>&1 || exit 0
+uci -q set luci.@command[-1].name='DIAG: проверка платы со звуком'
+uci -q set luci.@command[-1].command='/myscripts/run-diag-board --sound --log /tmp/run-diag-board.log'
+
+uci -q commit luci
+exit 0
