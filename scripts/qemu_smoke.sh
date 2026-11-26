@@ -97,15 +97,64 @@ echo "   uImage: $(wc -c < "$WORK/kernel.uImage") байт (load/entry 0x8000)"
 echo "== загрузка в QEMU (таймаут ${TIMEOUT}s) =="
 # Консоль платы — ttyPS0 = serial@e0001000 = второй UART QEMU (serial_hd(1)),
 # поэтому первый отдаём в null, второй — в stdio. Дисплей не нужен.
+#
+# stdin QEMU — файл-очередь (FIFO): через него в консоль уходят команды
+# диагностики. Оба конца держим открытыми (<>), иначе QEMU получит EOF
+# на пустом вводе и завершится раньше времени.
+FIFO="$WORK/serial.in"
+mkfifo "$FIFO"
+exec 3<>"$FIFO"
+
 set +e
 timeout "$TIMEOUT" qemu-system-arm \
-  -M xilinx-zynq-a9 -m 512 -display none \
+  -M xilinx-zynq-a9 -m 512 -display none -monitor none \
   -serial null -serial stdio \
   -kernel "$WORK/kernel.uImage" -dtb "$WORK/board.dtb" \
   -append "console=ttyPS0,115200 root=/dev/mmcblk0p2 rw rootwait" \
   -drive "file=$WORK/disk.img,format=raw,if=sd" \
-  > "$WORK/serial.log" 2>&1
-rc=$?
+  < "$FIFO" > "$WORK/serial.log" 2>&1 &
+QPID=$!
+set -e
+
+# Ожидание строки в журнале: 0 — строка появилась, 1 — таймаут или QEMU
+# завершился (ждать больше нечего).
+wait_log() {
+  pattern="$1"
+  limit="$2"
+  i=0
+  while [ "$i" -lt "$limit" ]; do
+    if grep -qaE "$pattern" "$WORK/serial.log" 2>/dev/null; then
+      return 0
+    fi
+    kill -0 "$QPID" 2>/dev/null || return 1
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+booted=0
+if wait_log "procd: - init complete -|Please press Enter to activate" "$TIMEOUT"; then
+  booted=1
+fi
+
+# Диагностика тем же скриптом, что запускает пользователь на плате:
+# профиль qemu пропускает проверки, для которых нужны FPGA и NAND.
+if [ "$booted" -eq 1 ]; then
+  echo "== запуск /myscripts/run-diag-board (профиль qemu) =="
+  printf '\n' >&3
+  sleep 1
+  printf '/myscripts/run-diag-board --profile qemu\n' >&3
+  wait_log 'RESULT: (PASS|FAIL)' 180 || true
+fi
+
+# Завершение: команда poweroff, затем сигнал по таймауту-обёртке.
+printf 'poweroff -f\n' >&3 2>/dev/null || true
+sleep 2
+set +e
+kill "$QPID" 2>/dev/null
+wait "$QPID" 2>/dev/null
+exec 3>&-
 set -e
 
 # если задан QEMU_LOG — сохраняем лог вне временного каталога (для артефакта CI)
@@ -114,15 +163,21 @@ if [ -n "${QEMU_LOG:-}" ]; then
 fi
 
 echo "== последовательная консоль (хвост) =="
-tail -n 80 "$WORK/serial.log" || true
+tail -n 120 "$WORK/serial.log" || true
 
-if grep -q "Kernel panic" "$WORK/serial.log"; then
+echo "== итог диагностики =="
+grep -aE '^(FAIL|SKIP|TOTAL|RESULT)' "$WORK/serial.log" | tail -n 40 || true
+if grep -qa "Kernel panic" "$WORK/serial.log"; then
   echo "FAIL: kernel panic" >&2
   exit 1
 fi
-if grep -qE "procd: - init complete -|Please press Enter to activate this console|BusyBox v[0-9]" "$WORK/serial.log"; then
-  echo "PASS: система дошла до init"
+if [ "$booted" -ne 1 ]; then
+  echo "FAIL: признаков загрузки нет" >&2
+  exit 1
+fi
+if grep -qa "RESULT: PASS" "$WORK/serial.log"; then
+  echo "PASS: система загрузилась, диагностика без FAIL"
   exit 0
 fi
-echo "FAIL: признаков загрузки нет (код QEMU $rc)" >&2
+echo "FAIL: диагностика сообщила RESULT: FAIL или не завершилась" >&2
 exit 1

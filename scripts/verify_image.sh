@@ -231,6 +231,16 @@ if [ -n "$rootfs_off" ]; then
       check_in_rootfs "sbin/nand_install"
       check_in_rootfs "etc/uci-defaults/99_antminer_setup"
       check_in_rootfs "etc/fw_env.config"
+      check_in_rootfs "etc/uci-defaults/91-board-scripts"
+      check_in_rootfs "myscripts/run-diag-board"
+      # Каталог пользовательских скриптов должен быть доступен на запись:
+      # права видны только в подробном листинге (-ll).
+      if unsquashfs -ll -o "$rootfs_off" "$IMG" 2>/dev/null |
+         grep -qE '^drwxrwxrwx .* myscripts$'; then
+        ok "rootfs: /myscripts с правами 777"
+      else
+        bad "rootfs: /myscripts без прав 777"
+      fi
       check_in_rootfs "usr/libexec/rpcd/fmradio"
       check_in_rootfs "etc/init.d/fmradio"
       if grep -qE "/lib/modules/[^/]+/zynq_fm_radio\.ko$" "$TMP/rootfs.list"; then

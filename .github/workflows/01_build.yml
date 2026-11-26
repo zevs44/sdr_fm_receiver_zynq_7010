@@ -486,7 +486,7 @@ jobs:
     needs: build
     if: ${{ github.ref_type != 'tag' && inputs.release_run_id == '' && inputs.tag == '' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -516,7 +516,7 @@ jobs:
             echo "ОШИБКА: в артефакте нет *.img.gz" >&2
             exit 1
           fi
-          bash scripts/qemu_smoke.sh "$img" 180
+          bash scripts/qemu_smoke.sh "$img" 300
 
       - name: Upload serial log
         if: always()
