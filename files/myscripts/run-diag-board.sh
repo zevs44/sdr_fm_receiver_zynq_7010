@@ -98,7 +98,7 @@ DT=/sys/firmware/devicetree/base
 emit "run-diag-board.sh: проверка платы Antminer S9"
 emit "профиль   : $PROFILE"
 emit "дата      : $(date)"
-emit "hostname  : $(hostname)"
+emit "hostname  : $(cat /proc/sys/kernel/hostname 2>/dev/null)"
 emit "ядро      : $(uname -r)"
 emit "команда   : $(cat /proc/cmdline)"
 emit "журнал    : ${LOG:-только консоль}"
@@ -127,23 +127,25 @@ fi
 
 # ── 2. Каталог пользовательских скриптов ─────────────────────────────────
 sec "2. каталог /myscripts"
+# В образе нет утилит stat и hostname: права берём из ls, имя — из /proc.
+perm_of() { ls -ld "$1" 2>/dev/null | awk '{print $1}'; }
 if [ -d /myscripts ]; then
-	mode=$(stat -c %a /myscripts 2>/dev/null || printf '?')
-	if [ "$mode" = "777" ]; then
+	perm=$(perm_of /myscripts)
+	if [ "$perm" = "drwxrwxrwx" ]; then
 		pass "каталог /myscripts с правами 777"
 	else
-		fail "каталог /myscripts с правами $mode вместо 777"
+		fail "каталог /myscripts с правами ${perm:-неизвестно} вместо drwxrwxrwx"
 	fi
 else
 	fail "каталога /myscripts нет"
 fi
 if [ -x /myscripts/run-diag-board.sh ]; then
 	pass "скрипт /myscripts/run-diag-board.sh на месте"
-	mode=$(stat -c %a /myscripts/run-diag-board.sh 2>/dev/null || printf '?')
-	if [ "$mode" = "777" ]; then
+	perm=$(perm_of /myscripts/run-diag-board.sh)
+	if [ "$perm" = "-rwxrwxrwx" ]; then
 		pass "скрипт /myscripts/run-diag-board.sh с правами 777"
 	else
-		fail "скрипт /myscripts/run-diag-board.sh с правами $mode вместо 777"
+		fail "скрипт /myscripts/run-diag-board.sh с правами ${perm:-неизвестно} вместо -rwxrwxrwx"
 	fi
 else
 	fail "скрипта /myscripts/run-diag-board.sh нет"
@@ -280,11 +282,11 @@ else
 	fi
 fi
 
-if hostname | grep -q '^owrt-zynq7010-'; then
-	pass "hostname: $(hostname)"
-else
-	fail "hostname: $(hostname) — ожидался owrt-zynq7010-XXXX"
-fi
+host_name=$(cat /proc/sys/kernel/hostname 2>/dev/null)
+case "$host_name" in
+	owrt-zynq7010-*) pass "hostname: $host_name" ;;
+	*) fail "hostname: ${host_name:-пусто} — ожидался owrt-zynq7010-XXXX" ;;
+esac
 
 if [ -s /etc/antminer-mac ]; then
 	pass "MAC: постоянный адрес $(cat /etc/antminer-mac)"
