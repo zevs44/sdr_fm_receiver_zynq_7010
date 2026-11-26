@@ -39,17 +39,17 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 
 ## 3. Добавленный слой сборки OpenWrt
 
-### 3.1 Патчи к дереву OpenWrt (`target-patches/`)
+### 3.1 Патчи к дереву OpenWrt (`target_patches/`)
 
 | Патч | Что делает | Зачем |
 |---|---|---|
-| `0001_openwrt-backport-antminer-s9.patch` | бэкпорт поддержки платы из upstream (`e050bb7`): `board.d/02_network`, устройство в `image/Makefile`, два DTS-патча. Изменения `uboot-zynq` исключены — загрузчик поставляется готовым | в ветке 25.12 платы нет |
-| `0200_zynq-sdcard-bitstream-and-uenv.patch` | в `Build/zynq-sdcard` файлы FAT берутся из нашей папки `antminer/`: `boot.bin`, `u-boot.img`, `uEnv.txt`, плюс `system.bit.gz` и `uboot_env.bin`; переменные образа объявлены в `DEVICE_VARS` | штатный образ не грузит битстрим и наш `uEnv.txt` |
-| `0300_zynq-antminer-s9-pl.patch` | узлы PL в DTS: `axi_i2s_adi@43c00000`, `fm-radio@43c60000`, `audio_clock`, `sound` | без узлов нет `/dev/radio0` и ALSA-карты |
-| `0310_zynq-antminer-s9-nand.patch` | таблица разделов NAND в DTS (`boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs`), раскладка автора | без меток `/proc/mtd` пуст и `nand_install` не находит разделы |
-| `0400_zynq-nand-feature.patch` | добавляет признак `nand` в `FEATURES` цели | открывает штатные `ubi-utils`/`nand-utils`, скрытые за `@NAND_SUPPORT` |
-| `0500_zynq-sound-config.patch` | включает в конфиге ядра `CONFIG_SOUND` и `CONFIG_SND*`: ALSA SoC, ADI AXI-I2S, simple-card, SPDIF | без `CONFIG_SOUND` kconfig отбрасывает все `SND*` без сообщения об ошибке — звука в образе нет |
-| `0600_zynq-nand-config.patch` | включает `CONFIG_MTD_RAW_NAND`, `CONFIG_MTD_NAND_PL35X`, `CONFIG_PL353_SMC`, `CONFIG_MTD_UBI`, `CONFIG_UBIFS_FS` | драйвер NAND скрыт за `MTD_RAW_NAND`; без UBI/UBIFS `nand_install` не смонтирует том |
+| `0001_openwrt_backport_antminer_s9.patch` | бэкпорт поддержки платы из upstream (`e050bb7`): `board.d/02_network`, устройство в `image/Makefile`, два DTS-патча. Изменения `uboot-zynq` исключены — загрузчик поставляется готовым | в ветке 25.12 платы нет |
+| `0200_zynq_sdcard_bitstream_and_uenv.patch` | в `Build/zynq-sdcard` файлы FAT берутся из нашей папки `antminer/`: `boot.bin`, `u-boot.img`, `uEnv.txt`, плюс `system.bit.gz` и `uboot_env.bin`; переменные образа объявлены в `DEVICE_VARS` | штатный образ не грузит битстрим и наш `uEnv.txt` |
+| `0300_zynq_antminer_s9_pl.patch` | узлы PL в DTS: `axi_i2s_adi@43c00000`, `fm-radio@43c60000`, `audio_clock`, `sound` | без узлов нет `/dev/radio0` и ALSA-карты |
+| `0310_zynq_antminer_s9_nand.patch` | таблица разделов NAND в DTS (`boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs`), раскладка автора | без меток `/proc/mtd` пуст и `nand_install` не находит разделы |
+| `0400_zynq_nand_feature.patch` | добавляет признак `nand` в `FEATURES` цели | открывает штатные `ubi-utils`/`nand-utils`, скрытые за `@NAND_SUPPORT` |
+| `0500_zynq_sound_config.patch` | включает в конфиге ядра `CONFIG_SOUND` и `CONFIG_SND*`: ALSA SoC, ADI AXI-I2S, simple-card, SPDIF | без `CONFIG_SOUND` kconfig отбрасывает все `SND*` без сообщения об ошибке — звука в образе нет |
+| `0600_zynq_nand_config.patch` | включает `CONFIG_MTD_RAW_NAND`, `CONFIG_MTD_NAND_PL35X`, `CONFIG_PL353_SMC`, `CONFIG_MTD_UBI`, `CONFIG_UBIFS_FS` | драйвер NAND скрыт за `MTD_RAW_NAND`; без UBI/UBIFS `nand_install` не смонтирует том |
 
 ### 3.2 Конфигурация и файлы образа
 
@@ -69,7 +69,7 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
   выставляются (разбор режимов на сборке хрупок, а в рантайме права проверяет
   сама диагностика). Если uci-defaults не сработал — `chmod 777 /myscripts` на
   плате. Установка только добавляющая: файлы пользователя не удаляются.
-- `files/etc/uci-defaults/91-board-scripts` — кнопки `DIAG: проверка платы`
+- `files/etc/uci-defaults/91_board_scripts` — кнопки `DIAG: проверка платы`
   в LuCI и повторная проверка прав каталога.
 - `.openwrt-version` — единственный источник версии OpenWrt.
 
@@ -80,26 +80,26 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 | `scripts/apply.sh` | накладывает патчи (с проверкой), копирует загрузчик/битстрим/`uEnv.txt`, копирует `files/etc` в корневую файловую систему, подключает фид автора, ставит все фиды, убирает дубль `/etc/init.d/mpd` из фида, применяет конфиг и `defconfig` |
 | `scripts/check_config.sh` | сверяет запрошенный конфиг с итоговым (пакеты, которые `defconfig` исключил) и проверяет обязательные опции ядра в `target/linux/zynq/config-6.*` (имя файла ищется шаблоном — переживает смену версии ядра) |
 | `scripts/verify_image.sh` | проверяет образ: разделы, файлы FAT, сигнатуры, содержимое rootfs, узлы PL и разделы NAND в DTB, `/sbin/nand_install`, `/myscripts/run-diag-board.sh`, первичную настройку, `/etc/fw_env.config` |
-| `scripts/update_expected_artifacts.sh` | пересчитывает `scripts/expected-artifacts.sha256` по загрузчику, битстриму и `uEnv.txt`; убирает ручное обновление хешей |
+| `scripts/update_expected_artifacts.sh` | пересчитывает `scripts/expected_artifacts.sha256` по загрузчику, битстриму и `uEnv.txt`; убирает ручное обновление хешей |
 | `scripts/qemu_smoke.sh` | загружает образ в QEMU (`xilinx-zynq-a9`), ждёт init, затем через консоль запускает `/myscripts/run-diag-board.sh --profile qemu` и требует `RESULT: PASS` |
-| `scripts/expected-artifacts.sha256` | контрольные суммы загрузчика, битстрима и `uEnv.txt` |
+| `scripts/expected_artifacts.sha256` | контрольные суммы загрузчика, битстрима и `uEnv.txt` |
 
 ### 3.4 CI (GitHub Actions)
 
 | Workflow | Назначение |
 |---|---|
 | `01_build.yml` | единый конвейер из четырёх пронумерованных шагов: `01 lint` → `02 build` → `03 qemu smoke` → `04 release`. Шаги связаны зависимостями (`build` после `lint`; `release` — `needs: qemu` c условием `!cancelled()`, потому что на теге шаги 02–03 пропущены). Сборка образа (линт, проверки входов и конфига, `make -k world`, диагностика падений, проверка образа, QEMU, артефакты), QEMU-проверка в том же прогоне без пересборки и публикация GitHub Release по тегу `v*` из успешного прогона (файл образа, SHA-256, список изменений). Шаг `03 qemu smoke` запускает диагностику платы и валит прогон без `RESULT: PASS` — релиз берёт только проверенный образ. Тег — версия образа проекта (`v1.1.0`, `v1.2.0`), версия OpenWrt выводится заголовком в описании релиза (`## OPENWRT 25.12.6`) |
-| `80_cleanup-runs.yml` | раз в сутки удаляет старые успешные прогоны (по умолчанию — watcher, старше 10 дней) |
+| `80_cleanup_runs.yml` | раз в сутки удаляет старые успешные прогоны (по умолчанию — watcher, старше 10 дней) |
 | `88_manual_qemu_check.yml` | ручная перепроверка готового образа: берёт артефакт `sdcard-*` из указанного прогона и запускает `scripts/qemu_smoke.sh` из текущей ветки. Нужна, когда изменились проверки, а пересобирать образ не требуется; конвейер не затрагивает |
-| `89_inspect-artifact.yml` | ручной осмотр образа из прогона: права и состав `rootfs` |
-| `90_watch-upstream.yml` | раз в 6 часов проверяет новые стабильные релизы OpenWrt; перед закреплением версии проверяет, что патчи на неё ложатся |
+| `89_inspect_artifact.yml` | ручной осмотр образа из прогона: права и состав `rootfs` |
+| `90_watch_upstream.yml` | раз в 6 часов проверяет новые стабильные релизы OpenWrt; перед закреплением версии проверяет, что патчи на неё ложатся |
 
 ### 3.5 Документация
 
 - `docs/` — аудиопотоки, распиновка колодок, пересборка битстрима, установка
   в NAND, проверка платы (`04_board_check.md` и `.ru.md`) — на английском и русском;
-- `BUILD.md` — сборка образа и проверки;
-- `FORK_CHANGES.md` — этот документ.
+- `build.md` — сборка образа и проверки;
+- `fork_changes.md` — этот документ.
 
 ### 3.6 Первичная настройка при загрузке
 

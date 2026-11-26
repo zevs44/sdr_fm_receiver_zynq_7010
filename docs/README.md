@@ -20,8 +20,8 @@ dark themes and in any Markdown viewer.
 
 Related documents in the repository root:
 
-- [`BUILD.md`](../BUILD.md) — building the OpenWrt image (locally and in CI).
-- [`FORK_CHANGES.md`](../FORK_CHANGES.md) — what this fork changes relative to upstream.
+- [`build.md`](../build.md) — building the OpenWrt image (locally and in CI).
+- [`fork_changes.md`](../fork_changes.md) — what this fork changes relative to upstream.
 - [`bitstream/README.md`](../bitstream/README.md) — where the bitstream comes from.
 
 ## Scope and accuracy

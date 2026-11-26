@@ -18,7 +18,7 @@ which skips the checks that need the FPGA and NAND.
   `nand_install --dry-run`.
 
 Mode `777` on the directory and the script is set by `uci-defaults` on the first
-boot (`/etc/uci-defaults/91-board-scripts`). If the modes are missing, run
+boot (`/etc/uci-defaults/91_board_scripts`). If the modes are missing, run
 `chmod 777 /myscripts /myscripts/run-diag-board.sh`. If the directory already
 existed with your own files, the installation leaves them alone: the image ships
 only its own `run-diag-board.sh` and never clears the directory.
@@ -85,7 +85,7 @@ scp root@<board-address>:/tmp/run-diag-board.log ./run-diag-board.log
 ### Over LuCI
 
 `System` → `Commands` → `DIAG: проверка платы` (or `DIAG: проверка платы со
-звуком`). The buttons are created by `/etc/uci-defaults/91-board-scripts` on the
+звуком`). The buttons are created by `/etc/uci-defaults/91_board_scripts` on the
 first boot.
 
 ### Parameters

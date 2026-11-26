@@ -97,12 +97,12 @@ while IFS= read -r line; do
   fi
 done < "$REQ"
 
-# ── опции ядра из target-patches ────────────────────────────────────────────
+# ── опции ядра из target_patches ────────────────────────────────────────────
 # Символы Kconfig в target/linux/*/config-6.* не входят в запрошенный конфиг
 # OpenWrt, поэтому сверх defconfig их никто не проверяет. При невыполненной
 # зависимости kconfig отбрасывает символ без сообщения об ошибке: звук и NAND
 # исчезают из ядра, а сборка остаётся успешной (образ v25.12.6, журнал
-# 17_boot_log_v25.12.6.log).
+# 17_boot_log_v25_12_6.md).
 # Имя файла берём шаблоном: при смене ядра оно станет config-6.18 и т. п.
 KCONF="$(find "$OWRT/target/linux/zynq" -maxdepth 1 -name 'config-6.*' 2>/dev/null | sort | tail -1 || true)"
 if [ -z "$KCONF" ]; then

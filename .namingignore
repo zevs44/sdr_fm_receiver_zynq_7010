@@ -1,0 +1,7 @@
+# Имена заданы исходным репозиторием, U-Boot и OpenWrt (E2, E4, E5).
+packages/
+docs/img/
+files/etc/uci-defaults/
+files/uEnv.txt
+files/myscripts/
+bootloader/u-boot.img

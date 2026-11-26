@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# update_expected_artifacts.sh — пересчитывает scripts/expected-artifacts.sha256.
+# update_expected_artifacts.sh — пересчитывает scripts/expected_artifacts.sha256.
 #
 # Использование:
 #   bash scripts/update_expected_artifacts.sh
@@ -13,7 +13,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-OUT="$HERE/expected-artifacts.sha256"
+OUT="$HERE/expected_artifacts.sha256"
 
 cd "$ROOT"
 
@@ -34,7 +34,7 @@ fi
 
 {
   echo "# Контрольные суммы входных двоичных файлов."
-  echo "# Проверяются до сборки: sha256sum -c scripts/expected-artifacts.sha256"
+  echo "# Проверяются до сборки: sha256sum -c scripts/expected_artifacts.sha256"
   echo "# Ловит битый коммит, порчу переводов строк и подмену артефакта."
   echo "# Обновление: bash scripts/update_expected_artifacts.sh"
   # На Windows sha256sum пишет «*путь» (двоичный режим); приводим к обычным

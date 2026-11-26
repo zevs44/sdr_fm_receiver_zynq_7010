@@ -5,8 +5,8 @@
 
 | Файл | Что делает | Источник |
 |---|---|---|
-| `0001_openwrt-backport-antminer-s9.patch` | Поддержка платы Bitmain Antminer S9: `uboot-zynq` (сборка U-Boot + патч SD-boot), `board.d/02_network`, устройство в `image/Makefile`, два DTS-патча (PS) | upstream commit `e050bb7`, автор Zoltan HERPAI |
-| `0200_zynq-sdcard-bitstream-and-uenv.patch` | В `Build/zynq-sdcard`: копирование `system.bit.gz` в FAT-раздел и подмена `uEnv.txt` на наш (с `fpga loadb`). Свои переменные образа (`BOOTBIN_FILE` и др.) добавлены в `DEVICE_VARS` — без этого `Device/Export` берёт значение последнего описанного устройства | наш патч |
+| `0001_openwrt_backport_antminer_s9.patch` | Поддержка платы Bitmain Antminer S9: `uboot-zynq` (сборка U-Boot + патч SD-boot), `board.d/02_network`, устройство в `image/Makefile`, два DTS-патча (PS) | upstream commit `e050bb7`, автор Zoltan HERPAI |
+| `0200_zynq_sdcard_bitstream_and_uenv.patch` | В `Build/zynq-sdcard`: копирование `system.bit.gz` в FAT-раздел и подмена `uEnv.txt` на наш (с `fpga loadb`). Свои переменные образа (`BOOTBIN_FILE` и др.) добавлены в `DEVICE_VARS` — без этого `Device/Export` берёт значение последнего описанного устройства | наш патч |
 
 ## Почему бэкпорт, а не сборка из master
 
@@ -34,9 +34,9 @@
 ## Как добавить патч
 
 1. Сделать изменение в чистом дереве OpenWrt нужной версии.
-2. `git diff > ../target-patches/NNNN_короткое-имя.patch` (нумерация — по порядку применения).
-3. Проверить: `cd openwrt && git apply --check -p1 ../target-patches/NNNN_*.patch`.
-4. Записать изменение в `FORK_CHANGES.md`.
+2. `git diff > ../target_patches/NNNN_короткое-имя.patch` (нумерация — по порядку применения).
+3. Проверить: `cd openwrt && git apply --check -p1 ../target_patches/NNNN_*.patch`.
+4. Записать изменение в `fork_changes.md`.
 
 ## Если патч перестал ложиться
 
@@ -45,6 +45,6 @@
 
 ```bash
 cd openwrt
-git apply --check -p1 ../target-patches/0001_openwrt-backport-antminer-s9.patch
+git apply --check -p1 ../target_patches/0001_openwrt_backport_antminer_s9.patch
 # посмотреть, какие строки не совпали, и пересобрать патч на новой базе
 ```

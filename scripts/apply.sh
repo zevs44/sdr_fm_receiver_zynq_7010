@@ -7,7 +7,7 @@
 #   по умолчанию — ./openwrt рядом с репозиторием
 #
 # Что делает:
-#   1. накладывает все патчи из target-patches/ по порядку (с проверкой, что ложатся);
+#   1. накладывает все патчи из target_patches/ по порядку (с проверкой, что ложатся);
 #   2. копирует битстрим в дерево сборки (если он есть);
 #   3. подключает фид автора как локальный src-link и ставит все фиды;
 #   4. ставит наш .config и запускает make defconfig.
@@ -43,9 +43,9 @@ OWRT="$(cd "$OWRT" && pwd)"
 
 echo "== 1. патчи =="
 shopt -s nullglob
-patches=("$HERE"/target-patches/*.patch)
+patches=("$HERE"/target_patches/*.patch)
 if [ ${#patches[@]} -eq 0 ]; then
-  echo "   ПРЕДУПРЕЖДЕНИЕ: в target-patches/ нет ни одного патча."
+  echo "   ПРЕДУПРЕЖДЕНИЕ: в target_patches/ нет ни одного патча."
   echo "   Сборка получится без поддержки платы и без узлов PL."
 else
   for p in "${patches[@]}"; do
@@ -99,7 +99,7 @@ if [ -d "$HERE/files/etc" ]; then
 fi
 
 # /myscripts: файлы кладутся в образ, а права ставит uci-defaults при первой
-# загрузке (files/etc/uci-defaults/91-board-scripts). Права в образе не
+# загрузке (files/etc/uci-defaults/91_board_scripts). Права в образе не
 # выставляются намеренно: разбор режимов на этапе сборки хрупок, а рантайм-права
 # проверяет сама диагностика и шаг 03 qemu smoke. Установка только добавляющая:
 # файлы пользователя в /myscripts не удаляются.

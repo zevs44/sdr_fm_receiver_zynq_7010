@@ -20,8 +20,8 @@
 
 Смежные документы в корне репозитория:
 
-- [`BUILD.md`](../BUILD.md) — сборка образа OpenWrt (локально и в CI).
-- [`FORK_CHANGES.md`](../FORK_CHANGES.md) — что этот форк меняет относительно оригинала.
+- [`build.md`](../build.md) — сборка образа OpenWrt (локально и в CI).
+- [`fork_changes.md`](../fork_changes.md) — что этот форк меняет относительно оригинала.
 - [`bitstream/README.md`](../bitstream/README.md) — откуда берётся битстрим.
 
 ## Область применимости и точность

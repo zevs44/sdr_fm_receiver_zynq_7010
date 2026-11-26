@@ -19,7 +19,7 @@ JTAG adapter.
 | Change a pin assignment in the XDC | yes |
 | Add or remove a block in the block design | yes |
 | Change a parameter of an existing block | yes |
-| Change kernel, packages, root filesystem | no — see [BUILD.md](../BUILD.md) |
+| Change kernel, packages, root filesystem | no — see [build.md](../build.md) |
 | Change the board's boot arguments | no — edit `uEnv.txt` |
 
 ## 2. Requirements
@@ -132,7 +132,7 @@ reset_run synth_1
 
 U-Boot loads the bitstream from the FAT partition of the SD card:
 
-![SD card boot chain](img/sd-boot-chain.svg)
+![SD card boot chain](img/sd_boot_chain.svg)
 
 *The FAT partition holds the boot loader, our `uEnv.txt`, the compressed bitstream
 and the kernel; U-Boot loads the bitstream into the PL before starting Linux.*
@@ -194,7 +194,7 @@ Logs: `vivado.log` and `vivado.jou` next to the project; run reports under
 ## 11. Where this fork expects the bitstream
 
 The build layer of this repository picks up `bitstream/system.bit.gz` and puts it
-into the FAT partition of the generated image. See [BUILD.md](../BUILD.md) and
+into the FAT partition of the generated image. See [build.md](../build.md) and
 `bitstream/README.md`.
 
 ---

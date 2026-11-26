@@ -231,10 +231,10 @@ if [ -n "$rootfs_off" ]; then
       check_in_rootfs "sbin/nand_install"
       check_in_rootfs "etc/uci-defaults/99_antminer_setup"
       check_in_rootfs "etc/fw_env.config"
-      check_in_rootfs "etc/uci-defaults/91-board-scripts"
+      check_in_rootfs "etc/uci-defaults/91_board_scripts"
       check_in_rootfs "myscripts/run-diag-board.sh"
       # Права на /myscripts в образе не проверяются: их ставит uci-defaults
-      # при первой загрузке (91-board-scripts), а в рантайме — сама диагностика
+      # при первой загрузке (91_board_scripts), а в рантайме — сама диагностика
       # (run-diag-board.sh) и шаг 03 qemu smoke. Разбор режимов в squashfs
       # зависел от версии unsquashfs и от формата листинга — источник ложных FAIL.
       check_in_rootfs "usr/libexec/rpcd/fmradio"

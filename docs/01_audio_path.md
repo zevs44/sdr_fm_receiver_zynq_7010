@@ -36,7 +36,7 @@ external pin: both feed the internal multiplexer.
 
 ## 2. Signal paths
 
-![Audio signal paths](img/audio-flow.svg)
+![Audio signal paths](img/audio_flow.svg)
 
 *Three sources, one multiplexer, two wired outputs. The red element marks a path that does not exist in the design.*
 
@@ -57,7 +57,7 @@ Two consequences worth stating plainly:
 - The external I2S port on **J9 is an input**. Connecting an I2S DAC there does
   not work: both ends would be inputs.
 
-![Output on J2 and the reconstruction filter](img/pdm-output.svg)
+![Output on J2 and the reconstruction filter](img/pdm_output.svg)
 
 *The J2 output is a 1-bit PDM stream. Without an RC low-pass filter and a buffer it
 cannot drive headphones.*
@@ -104,7 +104,7 @@ Physical layout: two rows of nine pins. Pin 1 is at the keyed end. The schematic
 symbol is drawn by function, not in physical order — do not read it as a picture
 of the connector.
 
-![Connector layout](img/connector-pinout.svg)
+![Connector layout](img/connector_pinout.svg)
 
 *One chain of the connector as it looks on the board. The pin numbering is the same
 for every chain, so the diagram works for J1 through J9.*
@@ -158,12 +158,12 @@ check the XDC file.
 - **PDM is not I2S.** The J2 output is a 1-bit stream; feeding it to an I2S DAC
   will not work.
 
-![Two I2S inputs cannot be connected](img/j9-both-inputs.svg)
+![Two I2S inputs cannot be connected](img/j9_both_inputs.svg)
 
 *Both ends listen and nobody talks: the FPGA port on J9 is an input, and so is the
 I2S input of a DAC.*
 
-![Antenna input circuit](img/antenna-lc.svg)
+![Antenna input circuit](img/antenna_lc.svg)
 
 *The antenna is a differential input. The LC tank sits between the two pins of J5;
 neither pin is grounded.*

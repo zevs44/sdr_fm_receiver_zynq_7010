@@ -1,10 +1,10 @@
 # Сборка образа OpenWrt для Antminer S9
 
 Форк репозитория `alexsys87/sdr_fm_receiver_zynq_7010`: пакеты автора + слой сборки
-свежего OpenWrt. Что именно изменено относительно оригинала — в [`FORK_CHANGES.md`](FORK_CHANGES.md).
+свежего OpenWrt. Что именно изменено относительно оригинала — в [`fork_changes.md`](fork_changes.md).
 
 **Что взято у автора без изменений:** проект Vivado (`vivado_2023.2/`), все 19
-пакетов из `packages/` (изменены только три файла — см. `FORK_CHANGES.md`),
+пакетов из `packages/` (изменены только три файла — см. `fork_changes.md`),
 README. Загрузчик и битстрим — из релиза автора. `nand_install` — идея автора
 (его второй проект `Antminer_S9_OpenWRT`), наш пакет её развивает.
 
@@ -117,7 +117,7 @@ make -j"$(nproc)" download
 make -j"$(nproc)" -k world
 
 # 4. проверки (из корня репозитория)
-sha256sum -c scripts/expected-artifacts.sha256      # входные двоичные файлы
+sha256sum -c scripts/expected_artifacts.sha256      # входные двоичные файлы
 bash scripts/check_config.sh ./openwrt              # defconfig ничего не исключил
 bash scripts/verify_image.sh ./openwrt/bin/targets/zynq/generic   # образ работоспособен
 ```
@@ -129,7 +129,7 @@ bash scripts/verify_image.sh ./openwrt/bin/targets/zynq/generic   # образ �
 Workflow `.github/workflows/01_build.yml` запускается:
 
 - вручную (`workflow_dispatch`, можно указать тег OpenWrt, пакет и параллельность);
-- при изменениях в `packages/`, `target-patches/`, `configs/`, `files/`,
+- при изменениях в `packages/`, `target_patches/`, `configs/`, `files/`,
   `bootloader/`, `bitstream/`, `scripts/`, `.github/workflows/01_build.yml`.
 
 Образ и итоговый `.config` выкладываются артефактом `sdcard-<тег>`.
@@ -141,14 +141,14 @@ Workflow `.github/workflows/01_build.yml` запускается:
 пакете, а доводит проход и печатает **все** сломанные пакеты. Это экономит
 полный прогон (~1,5 ч) на каждый следующий дефект.
 
-`.github/workflows/90_watch-upstream.yml` раз в 6 часов проверяет новые стабильные релизы
+`.github/workflows/90_watch_upstream.yml` раз в 6 часов проверяет новые стабильные релизы
 OpenWrt: если тег новее, чем в `.openwrt-version`, **сначала проверяет, что патч-слой на него
 ложится** (клон тега + `git apply --check` каждого патча), и только потом обновляет файл и
 запускает сборку. Если патч не ложится — версия не закрепляется, workflow завершается ошибкой с сообщением:
 `.openwrt-version` не укажет на сломанную версию.
 
-`.github/workflows/80_cleanup-runs.yml` раз в сутки удаляет старые **успешные** прогоны
-(по умолчанию — `90_watch-upstream.yml`, старше 10 дней), чтобы история Actions не росла
+`.github/workflows/80_cleanup_runs.yml` раз в сутки удаляет старые **успешные** прогоны
+(по умолчанию — `90_watch_upstream.yml`, старше 10 дней), чтобы история Actions не росла
 бесконечно. Неуспешные прогоны не удаляются никогда: это история отладки. Параметры
 (`workflow`, `older_than_days`, `dry_run`) задаются при ручном запуске; `workflow: all`
 чистит все workflow репозитория, включая собственные прошлые прогоны чистки (текущий
@@ -234,7 +234,7 @@ SHA-256, ссылка на прогон и список коммитов с пр
 | Проверка | Где | Что ловит |
 |---|---|---|
 | `shellcheck`, `actionlint` | шаг `lint` | ошибки в скриптах и YAML workflow |
-| `scripts/expected-artifacts.sha256` + магия битстрима | шаг «Verify input artifacts» | битый коммит, порча переводов строк, подмена двоичного файла |
+| `scripts/expected_artifacts.sha256` + магия битстрима | шаг «Verify input artifacts» | битый коммит, порча переводов строк, подмена двоичного файла |
 | ожидаемые файлы в диффе | шаг «Audit patch layer» | патч лёг частично или не лёг вовсе |
 | `scripts/check_config.sh` | шаг «Verify config» | `defconfig` без сообщения исключил пакет или поменял значение |
 | `scripts/verify_image.sh` | шаг «Verify image» | образ без битстрима, без kmod, с чужим деревом устройства, без узлов PL в DTB, без `/sbin/nand_install` |
@@ -243,7 +243,7 @@ SHA-256, ссылка на прогон и список коммитов с пр
 Проверки запускаются и локально:
 
 ```bash
-sha256sum -c scripts/expected-artifacts.sha256
+sha256sum -c scripts/expected_artifacts.sha256
 bash scripts/check_config.sh ./openwrt
 bash scripts/verify_image.sh ./openwrt/bin/targets/zynq/generic
 ```
@@ -321,9 +321,9 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 | Префикс артефакта | `01_build.yml` → `env.ARTIFACT_PREFIX` | `sdcard` | косметика |
 | Таймаут сборки | `01_build.yml` → `timeout-minutes` | `330` | если сборка стала дольше |
 | Параллельность make | `01_build.yml` → `env.DEFAULT_JOBS` | `4` (не больше `nproc`) | при OOM — снижать; при большом раннере — поднимать |
-| Репозиторий для слежения | `90_watch-upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
-| Файл версии | `90_watch-upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
-| Фильтр стабильных тегов | `90_watch-upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
+| Репозиторий для слежения | `90_watch_upstream.yml` → `env.OPENWRT_REPO` | `openwrt/openwrt` | при переходе на форк |
+| Файл версии | `90_watch_upstream.yml` → `env.VERSION_FILE` | `.openwrt-version` | почти никогда |
+| Фильтр стабильных тегов | `90_watch_upstream.yml` → `env.STABLE_TAG_REGEX` | `^v[0-9]+\.[0-9]+\.[0-9]+$` | если нужны rc-сборки |
 | Цель и устройство | `configs/zynq_antminer_s9.config` | `CONFIG_TARGET_zynq*`, `..._DEVICE_bitmain_zynq-antminer-s9` | при смене платы |
 
 Порядок перехода:
@@ -331,8 +331,8 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 1. Изменить `.openwrt-version` (или дождаться watcher'а — он сам проверит, что патчи ложатся,
    и не закрепит версию, если нет).
 2. Запустить сборку вручную: `gh workflow run 01_build.yml`.
-3. Если патч не лёг — пересобрать его на новой базе, см. `target-patches/README.md`.
-4. Записать изменение в `FORK_CHANGES.md`.
+3. Если патч не лёг — пересобрать его на новой базе, см. `target_patches/README.md`.
+4. Записать изменение в `fork_changes.md`.
 
 > **Когда бэкпорт `0001` станет лишним.** Поддержка платы ушла в upstream 2026-06-14
 > (коммит `e050bb7`) и появится в стабильной ветке после 25.12 — вероятно, в 26.x.
@@ -347,9 +347,9 @@ EXTRA_DEPENDS := kernel (=$(LINUX_VERSION)~$(LINUX_VERMAGIC)-r$(LINUX_RELEASE))
 
 | Симптом | Причина | Что делать |
 |---|---|---|
-| `патч не ложится на это дерево` | сменилась версия OpenWrt | пересобрать патч на новой базе, см. `target-patches/README.md` |
-| `No rule to make target .../system.bit.gz` | патч `0200` не применился | проверить порядок патчей в `target-patches/` |
-| пакет автора не собирается | дрейф API ядра или LuCI | править пакет, запись в `FORK_CHANGES.md` |
+| `патч не ложится на это дерево` | сменилась версия OpenWrt | пересобрать патч на новой базе, см. `target_patches/README.md` |
+| `No rule to make target .../system.bit.gz` | патч `0200` не применился | проверить порядок патчей в `target_patches/` |
+| пакет автора не собирается | дрейф API ядра или LuCI | править пакет, запись в `fork_changes.md` |
 | `No space left on device` | мало места | освободить диск, `make clean` |
 | образ есть, но плата не грузится | нет `boot.bin`/`uEnv.txt` в FAT | проверить, что `apply.sh` отработал без ошибок |
 | `Verify config` завершился с ошибкой на `CONFIG_PACKAGE_*` | `defconfig` исключил пакет: нет в фидах или не разрешилась зависимость | смотреть шаг «Verify config», чинить зависимость пакета |

@@ -18,7 +18,7 @@ NAND, сеть и службы. Каждая проверка печатает �
   `nand_install --dry-run`.
 
 Права `777` на каталог и скрипт ставит `uci-defaults` при первой загрузке
-(`/etc/uci-defaults/91-board-scripts`). Если права не появились, выполните
+(`/etc/uci-defaults/91_board_scripts`). Если права не появились, выполните
 `chmod 777 /myscripts /myscripts/run-diag-board.sh`. Если каталог существовал
 раньше и в нём лежат ваши файлы, установка их не трогает: образ поставляет только
 свой файл `run-diag-board.sh` и не очищает каталог.
@@ -85,7 +85,7 @@ scp root@<адрес-платы>:/tmp/run-diag-board.log ./run-diag-board.log
 ### Через LuCI
 
 `Система` → `Команды` → `DIAG: проверка платы` (или `DIAG: проверка платы со
-звуком`). Кнопки создаёт `/etc/uci-defaults/91-board-scripts` при первой загрузке.
+звуком`). Кнопки создаёт `/etc/uci-defaults/91_board_scripts` при первой загрузке.
 
 ### Параметры
 

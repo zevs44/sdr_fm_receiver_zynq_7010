@@ -39,7 +39,7 @@ on:
     branches: [main]
     paths:
       - "packages/**"
-      - "target-patches/**"
+      - "target_patches/**"
       - "configs/**"
       - "files/**"
       - "bootloader/**"
@@ -172,7 +172,7 @@ jobs:
       # до 90-минутной сборки.
       - name: Verify input artifacts
         run: |
-          sha256sum -c scripts/expected-artifacts.sha256
+          sha256sum -c scripts/expected_artifacts.sha256
           gzip -t bitstream/system.bit.gz
           # `|| true`: head закрывает поток раньше gzip, а GitHub включает pipefail
           magic="$(gzip -dc bitstream/system.bit.gz 2>/dev/null | head -c 4 | od -An -tx1 | tr -d ' \n' || true)"
@@ -259,7 +259,7 @@ jobs:
           # тот же каталог, что и CCACHE_DIR ниже: раньше кэш сохранялся из
           # ~/.ccache, а сборка писала в $GITHUB_WORKSPACE/.ccache — кэш не работал
           path: ${{ github.workspace }}/.ccache
-          key: ccache-${{ steps.tag.outputs.value }}-${{ hashFiles('configs/**', 'target-patches/**', 'packages/**') }}
+          key: ccache-${{ steps.tag.outputs.value }}-${{ hashFiles('configs/**', 'target_patches/**', 'packages/**') }}
           restore-keys: |
             ccache-${{ steps.tag.outputs.value }}-
 
@@ -694,7 +694,7 @@ jobs:
             echo
             echo "Записать образ на microSD (Rufus, Win32 Disk Imager или \`dd\`),"
             echo "вставить в плату, перемычки JP1–JP4 = \`0 1 0 1\` (TF Card: JP2 = 1, JP4 = 1)."
-            echo "Значение \`0 0 0 0\` — это Cascade JTAG, с ним плата с карты не загрузится. Подробности — \`BUILD.md\`."
+            echo "Значение \`0 0 0 0\` — это Cascade JTAG, с ним плата с карты не загрузится. Подробности — \`build.md\`."
           } > release-notes.md
           cat release-notes.md
 

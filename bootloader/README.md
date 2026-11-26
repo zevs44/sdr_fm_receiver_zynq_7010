@@ -43,7 +43,7 @@ FAT-раздел образа `openwrt-zynq-s9-antminer_s9-ext4-sdcard.img.xz`.
 Проверенный FSBL проще сохранить.
 
 Порядок замены: положить новый файл, обновить таблицу выше (размер и SHA-256),
-закоммитить, записать изменение в `FORK_CHANGES.md`, пересобрать образ.
+закоммитить, записать изменение в `fork_changes.md`, пересобрать образ.
 
 ## Проверка
 
@@ -51,7 +51,7 @@ FAT-раздел образа `openwrt-zynq-s9-antminer_s9-ext4-sdcard.img.xz`.
 
 ```bash
 # контрольные суммы всех входных двоичных файлов сразу
-sha256sum -c scripts/expected-artifacts.sha256
+sha256sum -c scripts/expected_artifacts.sha256
 
 # либо только загрузчик
 sha256sum bootloader/*
@@ -59,4 +59,4 @@ sha256sum bootloader/*
 
 `boot.bin` начинается с векторов ARM (`fe ff ff ea` ×4), а не с заголовка Xilinx:
 это готовый FSBL, а не bit-файл. Достоверная проверка — контрольная сумма;
-машиночитаемый список — `scripts/expected-artifacts.sha256` в корне репозитория.
+машиночитаемый список — `scripts/expected_artifacts.sha256` в корне репозитория.

@@ -69,7 +69,7 @@ jobs:
             "https://github.com/${OPENWRT_REPO}.git" "$tmp/openwrt"
           failed=0
           shopt -s nullglob
-          for p in target-patches/*.patch; do
+          for p in target_patches/*.patch; do
             if git -C "$tmp/openwrt" apply --check -p1 "$GITHUB_WORKSPACE/$p" 2>/dev/null; then
               echo "ok   $p"
             else
@@ -79,7 +79,7 @@ jobs:
           done
           if [ "$failed" -ne 0 ]; then
             echo "Версия $TAG НЕ закреплена. Пересоберите патчи на новой базе" >&2
-            echo "(см. target-patches/README.md), затем запустите этот workflow вручную." >&2
+            echo "(см. target_patches/README.md), затем запустите этот workflow вручную." >&2
             exit 1
           fi
           echo "патч-слой ложится на $TAG"
