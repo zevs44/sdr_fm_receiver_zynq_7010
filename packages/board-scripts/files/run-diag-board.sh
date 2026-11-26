@@ -1,13 +1,13 @@
 #!/bin/sh
 #
-# run-diag-board — диагностика платы Antminer S9 (Zynq-7010) и её образа OpenWrt.
+# run-diag-board.sh — диагностика платы Antminer S9 (Zynq-7010) и её образа OpenWrt.
 #
 # Один и тот же скрипт работает на плате и в QEMU во время сборки:
-#   run-diag-board                     профиль board, параметры по умолчанию
-#   run-diag-board --profile qemu      проверки, применимые без FPGA и NAND
-#   run-diag-board --log /путь/файл    дублировать вывод в файл
-#   run-diag-board --sound             добавить проверку воспроизведения
-#   run-diag-board --full              добавить полные dmesg и logread
+#   run-diag-board.sh                     профиль board, параметры по умолчанию
+#   run-diag-board.sh --profile qemu      проверки, применимые без FPGA и NAND
+#   run-diag-board.sh --log /путь/файл    дублировать вывод в файл
+#   run-diag-board.sh --sound             добавить проверку воспроизведения
+#   run-diag-board.sh --full              добавить полные dmesg и logread
 #
 # Формат строки результата: «PASS|FAIL|SKIP  проверка: подробность».
 # Итог: «TOTAL pass=N fail=N skip=N» и «RESULT: PASS|FAIL».
@@ -95,7 +95,7 @@ show() {
 DT=/sys/firmware/devicetree/base
 
 # ── Отметка запуска ──────────────────────────────────────────────────────
-emit "run-diag-board: проверка платы Antminer S9"
+emit "run-diag-board.sh: проверка платы Antminer S9"
 emit "профиль   : $PROFILE"
 emit "дата      : $(date)"
 emit "hostname  : $(hostname)"
@@ -137,10 +137,16 @@ if [ -d /myscripts ]; then
 else
 	fail "каталога /myscripts нет"
 fi
-if [ -x /myscripts/run-diag-board ]; then
-	pass "скрипт /myscripts/run-diag-board на месте"
+if [ -x /myscripts/run-diag-board.sh ]; then
+	pass "скрипт /myscripts/run-diag-board.sh на месте"
+	mode=$(stat -c %a /myscripts/run-diag-board.sh 2>/dev/null || printf '?')
+	if [ "$mode" = "777" ]; then
+		pass "скрипт /myscripts/run-diag-board.sh с правами 777"
+	else
+		fail "скрипт /myscripts/run-diag-board.sh с правами $mode вместо 777"
+	fi
 else
-	fail "скрипта /myscripts/run-diag-board нет"
+	fail "скрипта /myscripts/run-diag-board.sh нет"
 fi
 
 # ── 3. Дерево устройства ─────────────────────────────────────────────────
