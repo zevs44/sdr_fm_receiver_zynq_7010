@@ -11,6 +11,8 @@
 | [rebuild-bitstream.ru.md](rebuild-bitstream.ru.md) | Русский | то же на русском |
 | [nand-install.md](nand-install.md) | English | writing OpenWrt from the SD card into NAND: safety model, usage, limits |
 | [nand-install.ru.md](nand-install.ru.md) | Русский | то же на русском |
+| [board-check.md](board-check.md) | English | диагностика платы: `/myscripts`, `run-diag-board`, запуск через UART, SSH и LuCI, передача журнала, профиль QEMU |
+| [board-check.ru.md](board-check.ru.md) | Русский | то же на русском |
 
 Схемы лежат в `docs/img/`. Это самодостаточные SVG: без внешних шрифтов, без
 растровых картинок, с прошитой тёмной подложкой — поэтому одинаково читаются в
