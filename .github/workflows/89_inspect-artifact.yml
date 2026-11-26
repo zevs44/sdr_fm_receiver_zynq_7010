@@ -1,42 +1,21 @@
-name: 89 debug artifact
+name: 89 inspect artifact
 
-# Разовая диагностика. Два режима:
-#   - без входных данных: проверить, сохраняет ли cp -fpR права каталога;
-#   - с run_id: распаковать образ прогона и показать права на /myscripts.
+# Разовая инспекция готового образа из указанного прогона: показать права
+# на /myscripts и состав rootfs. Запускается вручную, в конвейер не входит.
 
 on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "ID прогона с артефактом sdcard-*; пусто — только тест cp"
-        required: false
-        default: ""
+        description: "ID прогона с артефактом sdcard-*"
+        required: true
 
 permissions:
   contents: read
   actions: read
 
 jobs:
-  cp-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: cp -fpR semantics
-        run: |
-          set -eu
-          rm -rf t && mkdir -p t/src/myscripts t/dst
-          printf '#!/bin/sh\necho hi\n' > t/src/myscripts/a.sh
-          chmod 0777 t/src/myscripts t/src/myscripts/a.sh
-          cp -fpR t/src/. t/dst
-          echo "нет каталога в приёмнике:"
-          stat -c '%a %n' t/dst/myscripts t/dst/myscripts/a.sh
-          rm -rf t/dst2 && mkdir -p t/dst2/myscripts && chmod 0755 t/dst2/myscripts
-          cp -fpR t/src/. t/dst2
-          echo "каталог в приёмнике уже есть (0755):"
-          stat -c '%a %n' t/dst2/myscripts t/dst2/myscripts/a.sh
-
   inspect:
-    if: ${{ inputs.run_id != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

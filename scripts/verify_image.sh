@@ -237,17 +237,20 @@ if [ -n "$rootfs_off" ]; then
       # на запись и запуск: права видны только в подробном листинге (-ll).
       # В старых squashfs-tools флага нет — тогда проверка пропускается,
       # а не валит образ по причине версии утилиты.
+      # В листинге путь идёт с префиксом (squashfs-root/myscripts), поэтому
+      # имя отделяется «/», а не пробелом: шаблон с пробелом не совпадает
+      # никогда и даёт ложный FAIL.
       if unsquashfs -ll -o "$rootfs_off" "$IMG" > "$TMP/rootfs.ll" 2>/dev/null &&
          [ -s "$TMP/rootfs.ll" ]; then
-        if grep -qE '^drwxrwxrwx .* myscripts$' "$TMP/rootfs.ll"; then
+        if grep -qE '^drwxrwxrwx .*/myscripts$' "$TMP/rootfs.ll"; then
           ok "rootfs: /myscripts с правами 777"
         else
-          bad "rootfs: /myscripts без прав 777"
+          bad "rootfs: /myscripts без прав 777 ($(grep -E '/myscripts$' "$TMP/rootfs.ll" | head -1))"
         fi
-        if grep -qE '^-rwxrwxrwx .* run-diag-board\.sh$' "$TMP/rootfs.ll"; then
+        if grep -qE '^-rwxrwxrwx .*/run-diag-board\.sh$' "$TMP/rootfs.ll"; then
           ok "rootfs: run-diag-board.sh с правами 777"
         else
-          bad "rootfs: run-diag-board.sh без прав 777"
+          bad "rootfs: run-diag-board.sh без прав 777 ($(grep -E '/run-diag-board\.sh$' "$TMP/rootfs.ll" | head -1))"
         fi
       else
         skipped "права /myscripts: unsquashfs без -ll или листинг пуст"
