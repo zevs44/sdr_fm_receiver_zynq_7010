@@ -154,22 +154,21 @@ wait_log() {
 }
 
 booted=0
-# Ждём именно конец загрузки, а не приглашение консоли: приглашение procd
-# печатает раньше, чем /etc/init.d/boot запустит uci-defaults, и тогда права
-# на /myscripts ещё не выставлены — прямой запуск упрётся в Permission denied.
-if wait_log "procd: - init complete -" "$TIMEOUT"; then
+# Ждём появления консоли: в QEMU строка «procd: - init complete -» не печатается —
+# инициализация не доходит до конца (сеть и часы отсутствуют). Готовность
+# диагностики обеспечивает цикл ожидания исполняемого файла ниже: uci-defaults
+# выставляет права во время init, и цикл дождётся их появления.
+if wait_log "procd: - init complete -|Please press Enter to activate" "$TIMEOUT"; then
   booted=1
 fi
 
 # Диагностика тем же скриптом, что запускает пользователь на плате:
 # профиль qemu пропускает проверки, для которых нужны FPGA и NAND.
-# Ожидание готовности скрипта — на случай, если порядок инициализации изменится:
-# если файл так и не станет исполняемым, сработает общий таймаут.
 if [ "$booted" -eq 1 ]; then
   echo "== запуск /myscripts/run-diag-board.sh (профиль qemu) =="
   printf '\n' >&3
   sleep 1
-  printf 'i=0; while [ ! -x /myscripts/run-diag-board.sh ] && [ $i -lt 60 ]; do i=$((i+1)); sleep 1; done; /myscripts/run-diag-board.sh --profile qemu\n' >&3
+  printf 'i=0; while [ ! -x /myscripts/run-diag-board.sh ] && [ $i -lt 120 ]; do i=$((i+1)); sleep 1; done; /myscripts/run-diag-board.sh --profile qemu\n' >&3
   wait_log 'RESULT: (PASS|FAIL)' 180 || true
 fi
 
