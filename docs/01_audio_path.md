@@ -13,7 +13,7 @@ It answers three questions:
 
 > **Scope.** This is a description, not a recommendation. Changing the design
 > (for example, routing I2S to external pins) requires rebuilding the bitstream —
-> see [rebuild-bitstream.md](rebuild-bitstream.md).
+> see [02_rebuild_bitstream.md](02_rebuild_bitstream.md).
 
 ---
 

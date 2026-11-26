@@ -1,6 +1,6 @@
 # axi_sdr_fm — FPGA FM Stereo + RDS Receiver IP Core
 
-**English** | [Русский](README.ru.md)
+**English** | [Русский](README_ru.md)
 
 A complete, from-scratch FM broadcast receiver implemented in synthesizable
 Verilog for a Xilinx Zynq-7010, exposed to the PS (ARM) side as a single

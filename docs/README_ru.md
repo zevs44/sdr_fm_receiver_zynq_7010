@@ -5,14 +5,14 @@
 
 | Документ | Язык | Содержание |
 |---|---|---|
-| [audio-path.md](audio-path.md) | English | аудиопотоки, внешние пины, распиновка колодок, управление мюксом, проверка, ограничения и риски |
-| [audio-path.ru.md](audio-path.ru.md) | Русский | то же на русском |
-| [rebuild-bitstream.md](rebuild-bitstream.md) | English | установка Vivado, лицензия, правка проекта, сборка, прошивка без JTAG, типовые ошибки |
-| [rebuild-bitstream.ru.md](rebuild-bitstream.ru.md) | Русский | то же на русском |
-| [nand-install.md](nand-install.md) | English | writing OpenWrt from the SD card into NAND: safety model, usage, limits |
-| [nand-install.ru.md](nand-install.ru.md) | Русский | то же на русском |
-| [board-check.md](board-check.md) | English | диагностика платы: `/myscripts`, `run-diag-board.sh`, запуск через UART, SSH и LuCI, передача журнала, профиль QEMU |
-| [board-check.ru.md](board-check.ru.md) | Русский | то же на русском |
+| [01_audio_path.md](01_audio_path.md) | English | аудиопотоки, внешние пины, распиновка колодок, управление мюксом, проверка, ограничения и риски |
+| [01_audio_path_ru.md](01_audio_path_ru.md) | Русский | то же на русском |
+| [02_rebuild_bitstream.md](02_rebuild_bitstream.md) | English | установка Vivado, лицензия, правка проекта, сборка, прошивка без JTAG, типовые ошибки |
+| [02_rebuild_bitstream_ru.md](02_rebuild_bitstream_ru.md) | Русский | то же на русском |
+| [03_nand_install.md](03_nand_install.md) | English | writing OpenWrt from the SD card into NAND: safety model, usage, limits |
+| [03_nand_install_ru.md](03_nand_install_ru.md) | Русский | то же на русском |
+| [04_board_check.md](04_board_check.md) | English | диагностика платы: `/myscripts`, `run-diag-board.sh`, запуск через UART, SSH и LuCI, передача журнала, профиль QEMU |
+| [04_board_check_ru.md](04_board_check_ru.md) | Русский | то же на русском |
 
 Схемы лежат в `docs/img/`. Это самодостаточные SVG: без внешних шрифтов, без
 растровых картинок, с прошитой тёмной подложкой — поэтому одинаково читаются в
@@ -61,4 +61,4 @@
 
 Битстрим в `bitstream/` — штатный, из релиза автора. Своя сборка (I2S-выход на
 J6, антенна и FM-передатчик на J8) в репозиторий не входит: она собирается
-локально в Vivado, см. `docs/rebuild-bitstream*.md`.
+локально в Vivado, см. `docs/02_rebuild_bitstream*.md`.

@@ -95,7 +95,7 @@ set_property IOSTANDARD LVCMOS33 [get_ports <port_name>]
 net you want to expose. Keep the original connections: the internal path (the
 delta-sigma DAC on J2) must keep working.
 
-Before choosing a pin, read section 8 of [audio-path.md](audio-path.md): a pin
+Before choosing a pin, read section 8 of [01_audio_path.md](01_audio_path.md): a pin
 that is unused in the XDC is not necessarily free on the board.
 
 ## 7. Building

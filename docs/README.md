@@ -5,14 +5,14 @@ Reference material for this board and this design. Everything here describes the
 
 | Document | Language | Contents |
 |---|---|---|
-| [audio-path.md](audio-path.md) | English | audio signal paths, external pins, connector pinout, mux control, verification, pitfalls |
-| [audio-path.ru.md](audio-path.ru.md) | Русский | то же на русском |
-| [rebuild-bitstream.md](rebuild-bitstream.md) | English | Vivado installation, license, project edits, build, flashing without JTAG, common errors |
-| [rebuild-bitstream.ru.md](rebuild-bitstream.ru.md) | Русский | то же на русском |
-| [nand-install.md](nand-install.md) | English | writing OpenWrt from the SD card into NAND: safety model, usage, limits |
-| [nand-install.ru.md](nand-install.ru.md) | Русский | то же на русском |
-| [board-check.md](board-check.md) | English | board diagnostics: `/myscripts`, `run-diag-board.sh`, launch over UART, SSH and LuCI, log transfer, QEMU profile |
-| [board-check.ru.md](board-check.ru.md) | Русский | то же на русском |
+| [01_audio_path.md](01_audio_path.md) | English | audio signal paths, external pins, connector pinout, mux control, verification, pitfalls |
+| [01_audio_path_ru.md](01_audio_path_ru.md) | Русский | то же на русском |
+| [02_rebuild_bitstream.md](02_rebuild_bitstream.md) | English | Vivado installation, license, project edits, build, flashing without JTAG, common errors |
+| [02_rebuild_bitstream_ru.md](02_rebuild_bitstream_ru.md) | Русский | то же на русском |
+| [03_nand_install.md](03_nand_install.md) | English | writing OpenWrt from the SD card into NAND: safety model, usage, limits |
+| [03_nand_install_ru.md](03_nand_install_ru.md) | Русский | то же на русском |
+| [04_board_check.md](04_board_check.md) | English | board diagnostics: `/myscripts`, `run-diag-board.sh`, launch over UART, SSH and LuCI, log transfer, QEMU profile |
+| [04_board_check_ru.md](04_board_check_ru.md) | Русский | то же на русском |
 
 Diagrams live in `docs/img/`. They are self-contained SVG files: no external fonts,
 no raster images, a dark background baked in, so they render the same on light and
@@ -61,4 +61,4 @@ read-back verification.
 
 The bitstream in `bitstream/` is the stock one from the author's release. Our
 own build (I2S output on J6, antenna and FM transmitter on J8) is not part of
-this repository: it is built locally in Vivado, see `docs/rebuild-bitstream*.md`.
+this repository: it is built locally in Vivado, see `docs/02_rebuild_bitstream*.md`.

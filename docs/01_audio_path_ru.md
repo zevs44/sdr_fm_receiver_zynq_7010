@@ -13,7 +13,7 @@
 
 > **Область применения.** Это описание, а не рекомендация. Изменение дизайна
 > (например, вывод I2S на внешние пины) требует пересборки битстрима — см.
-> [rebuild-bitstream.ru.md](rebuild-bitstream.ru.md).
+> [02_rebuild_bitstream_ru.md](02_rebuild_bitstream_ru.md).
 
 ---
 
