@@ -118,6 +118,40 @@ RESULT: FAIL
 The `TOTAL` and `RESULT` lines are the machine-readable summary; the pipeline
 makes its decision on them.
 
+## NAND install and boot from NAND
+
+The check above only verifies that writing is possible. The install is a separate
+step. It needs the image written to an SD card (`build.md`, "Writing to the card")
+and the file `uboot.bin` in the FAT partition. The script refuses `--full` unless
+`boot.bin` contains the NAND driver (`OnDie ECC` marker).
+
+From the board console, booted from the SD card:
+
+```sh
+/sbin/nand_install --dry-run    # checks and plan, stamp valid for 10 minutes
+/sbin/nand_install --yes        # root filesystem to UBI, then five partitions
+```
+
+Then:
+
+1. Power off and remove the SD card.
+2. Set the boot jumpers to NAND: `0 1 0 0` — **JP2 = 1, JP3 = 0, JP4 = 0**
+   (`0` is a shunt on pins 1–2, `1` on pins 2–3). TF Card mode `0 1 0 1` looks
+   for the SD card and stops when the card is absent.
+3. Power on with the UART terminal running and save the full log (PuTTY:
+   `All session output`).
+4. Expected lines: the SPL reads U-Boot from NAND at offset `0x80000`; U-Boot
+   runs `nandboot` — reads `fpga`, loads the bitstream, reads `kernel`, starts
+   the kernel with `ubi.mtd=5`.
+5. If the board does not start, restore TF Card mode (`0 1 0 1`), insert the SD
+   card, boot from it and send the UART log together with the LED state.
+
+The `nand_install` script writes `uboot.bin` (U-Boot 2016.03, NAND boot commands
+baked in) to the `uboot` partition. `u-boot.img` (2025.01) is used only on the
+SD FAT partition. A steady red LED does not identify the failing stage:
+`PS_MIO37_LED_R` is driven by the PS and stays lit when the PS never reaches the
+console.
+
 ## Transferring the log
 
 - Over the network: `scp` from `/tmp` or from `/myscripts` when `--log` points
@@ -139,7 +173,8 @@ separate check set for the pipeline.
   verified on the board only.
 - The sound check confirms the path up to J2 (PDM). The external I2S on
   connector J6 appears only after a custom bitstream is built.
-- Nothing is written to NAND: `nand_install` runs with `--dry-run`.
+- The diagnostics step does not write to NAND: `nand_install` runs with
+  `--dry-run`; the install itself is described above.
 - Signal levels and edges are not measured by commands — a scope is required.
 
 ## Updating
