@@ -19,8 +19,15 @@
 | Файл | Размер | SHA-256 | Что это |
 |---|---|---|---|
 | `boot.bin` | 79 263 | `950d19c6e5bfd9d8…` | FSBL: инициализация PS, поиск и загрузка U-Boot |
-| `u-boot.img` | 915 008 | `f86c48050993d6af…` | U-Boot (FIT, `bootm`, `fpga loadb`, чтение `uEnv.txt`) |
+| `u-boot.img` | 915 008 | `f86c48050993d6af…` | U-Boot 2025.01 для FAT-раздела SD: его грузит SPL с карты |
+| `uboot.bin` | 575 828 | `60dd933089a20320…` | U-Boot 2016.03 для раздела NAND `uboot`: его грузит SPL из NAND, с зашитой NAND-загрузкой |
 | `uboot_env.bin` | 524 288 | `a5811783049db88f…` | сохранённое окружение U-Boot с командой `uenvcmd` |
+
+`u-boot.img` и `uboot.bin` — разные сборки U-Boot: первая идёт только на SD-карту,
+вторая — только в NAND. `uboot.bin` взят из второго проекта автора
+([Antminer_S9_OpenWRT](https://github.com/alexsys87/Antminer_S9_OpenWRT),
+`staging_dir/.../image/Antminer_s9-uboot.bin`); его `bootcmd` содержит путь
+`nand read` и работает без карты.
 
 Источник — релиз `v1.0.0` (2026-08-16) репозитория
 [alexsys87/sdr_fm_receiver_zynq_7010](https://github.com/alexsys87/sdr_fm_receiver_zynq_7010),

@@ -77,6 +77,12 @@ for f in boot.bin u-boot.img; do
 done
 # Окружение необязательно: без него U-Boot работает на значениях по умолчанию,
 # а nand_install проверит наличие файла сам.
+if [ -f "$HERE/bootloader/uboot.bin" ]; then
+  cp "$HERE/bootloader/uboot.bin" "$OWRT/antminer/uboot.bin"
+  echo "   NAND U-Boot: uboot.bin ($(wc -c < "$OWRT/antminer/uboot.bin") bytes)"
+else
+  echo "   WARNING: bootloader/uboot.bin is missing — NAND install will be unavailable"
+fi
 if [ -f "$HERE/bootloader/uboot_env.bin" ]; then
   cp "$HERE/bootloader/uboot_env.bin" "$OWRT/antminer/uboot_env.bin"
   echo "   U-Boot environment: uboot_env.bin ($(wc -c < "$OWRT/antminer/uboot_env.bin") bytes)"

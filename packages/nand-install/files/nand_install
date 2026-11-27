@@ -100,24 +100,24 @@ check_sig() {
 file_size() { wc -c < "$MNT/$1"; }
 part_size() { printf '%d' "$((0x$(mtd_size "$1")))"; }
 
-for f in boot.bin u-boot.img uboot_env.bin system.bit.gz fit.itb; do
+for f in boot.bin uboot.bin uboot_env.bin system.bit.gz fit.itb; do
 	[ -f "$MNT/$f" ] || die "missing file $f on the SD card"
 done
 
-# Загрузчик должен уметь читать NAND: SPL без драйвера NAND в режиме NAND
-# не стартует (проверено на плате 2026-11-27 — красный индикатор, загрузки нет).
-# Признак — строки драйвера в boot.bin. Обход только для восстановления: --force.
+# Загрузчик должен уметь читать NAND: SPL без NAND-драйвера в режиме NAND
+# не стартует. Признак собранного драйвера — строка OnDie ECC (микросхема
+# Micron 2c:da). Обход только для восстановления: --force.
 spl_has_string() {
 	dd if="$MNT/boot.bin" bs=65536 2>/dev/null | tr -d '\000' | grep -q "$1"
 }
 if [ "$MODE" = full ] && [ "$FORCE" != 1 ]; then
-	spl_has_string "NAND device" ||
+	spl_has_string "OnDie ECC" ||
 		die "boot.bin has no NAND driver: NAND boot is impossible (use --force only for recovery)"
 fi
 
 if [ "$MODE" = full ]; then
 	check_sig boot.bin 4 "$MD5_FSBL" "FSBL start"
-	check_sig u-boot.img 4 "$MD5_UIMAGE" "uImage header"
+	check_sig uboot.bin 4 "$MD5_UIMAGE" "uImage header"
 	check_sig system.bit.gz 2 "$MD5_GZIP" "gzip"
 	check_sig fit.itb 4 "$MD5_FIT" "FIT"
 	check_size() {
@@ -125,7 +125,7 @@ if [ "$MODE" = full ]; then
 			die "$1 ($(file_size "$1") B) is larger than partition $2 ($(part_size "$2") B)"
 	}
 	check_size boot.bin boot
-	check_size u-boot.img uboot
+	check_size uboot.bin uboot
 	check_size uboot_env.bin uboot_env
 	check_size system.bit.gz fpga
 	check_size fit.itb kernel
@@ -187,7 +187,7 @@ log "root filesystem written"
 if [ "$MODE" = full ]; then
 	log "writing bootloader, bitstream and kernel"
 	mtd write "$MNT/boot.bin" boot || die "mtd write boot failed"
-	mtd write "$MNT/u-boot.img" uboot || die "mtd write uboot failed"
+	mtd write "$MNT/uboot.bin" uboot || die "mtd write uboot failed"
 	mtd write "$MNT/uboot_env.bin" uboot_env || die "mtd write uboot_env failed"
 	mtd write "$MNT/system.bit.gz" fpga || die "mtd write fpga failed"
 	mtd write "$MNT/fit.itb" kernel || die "mtd write kernel failed"
@@ -195,7 +195,7 @@ if [ "$MODE" = full ]; then
 
 	log "verifying by read-back"
 	mtd verify "$MNT/boot.bin" boot || die "verify boot failed"
-	mtd verify "$MNT/u-boot.img" uboot || die "verify uboot failed"
+	mtd verify "$MNT/uboot.bin" uboot || die "verify uboot failed"
 	mtd verify "$MNT/uboot_env.bin" uboot_env || die "verify uboot_env failed"
 	mtd verify "$MNT/system.bit.gz" fpga || die "verify fpga failed"
 	mtd verify "$MNT/fit.itb" kernel || die "verify kernel failed"

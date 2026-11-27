@@ -9,7 +9,7 @@
 # Что проверяет:
 #   1. архив: gzip цел, образ распакован, sha256 и размер напечатаны;
 #   2. разделы: их два, FAT и squashfs, размеры правдоподобные;
-#   3. FAT-раздел: boot.bin, u-boot.img, uboot_env.bin, uEnv.txt, fit.itb,
+#   3. FAT-раздел: boot.bin, u-boot.img, uboot.bin, uboot_env.bin, uEnv.txt, fit.itb,
 #      system.bit.gz — на месте и не пустые; метка тома — ANTMINER_S9;
 #   4. содержимое: system.bit.gz побайтово равен репозиторному, uEnv.txt
 #      содержит `fpga loadb`, в fit.itb есть строка платы;
@@ -137,7 +137,7 @@ if [ -n "$fat_off" ]; then
   # Проверяем каждый файл напрямую, а не разбором `mdir -b ::`: формат
   # листинга зависит от версии mtools, и на прогоне 45354756963 grep -x
   # не совпал ни с одним именем, хотя mtype/mcopy те же файлы читали.
-  for f in boot.bin u-boot.img uboot_env.bin uEnv.txt fit.itb system.bit.gz; do
+  for f in boot.bin u-boot.img uboot.bin uboot_env.bin uEnv.txt fit.itb system.bit.gz; do
     if mdir -i "$FAT" "::$f" >/dev/null 2>&1; then
       ok "FAT: $f is present"
     elif [ "$f" = "system.bit.gz" ] && [ "${ALLOW_MISSING_BITSTREAM:-0}" = "1" ]; then

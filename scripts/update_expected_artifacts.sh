@@ -21,8 +21,8 @@ OUT="$HERE/expected_artifacts.sha256"
 cd "$ROOT"
 
 files=()
-for f in bootloader/boot.bin bootloader/u-boot.img bootloader/uboot_env.bin \
-         bitstream/system.bit.gz files/uEnv.txt; do
+for f in bootloader/boot.bin bootloader/u-boot.img bootloader/uboot.bin \
+         bootloader/uboot_env.bin bitstream/system.bit.gz files/uEnv.txt; do
   if [ -f "$f" ]; then
     files+=("$f")
   else

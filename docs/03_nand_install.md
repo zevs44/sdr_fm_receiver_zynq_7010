@@ -65,14 +65,17 @@ install entry works only within 10 minutes after it.
   on the Linux side. Booting from NAND needs a bootloader whose environment
   lives in NAND, and the NAND boot mode (`0 1 0 0`). Until then the install
   writes a verified copy of the system, not a boot medium.
-- **The shipped bootloader cannot boot from NAND.** `bootloader/boot.bin` has no
-  NAND driver: the binary contains no `NAND device` strings and its boot-mode
-  switch has no NAND branch. In NAND boot mode the board shows a lit red LED and
-  no console output. The script now refuses `--full` unless `boot.bin` contains a
-  NAND driver; `--force` bypasses the check for recovery only. A NAND-capable SPL
-  must be built separately: mainline U-Boot with `SPL_NAND_SUPPORT`, a
-  fixed-geometry SPL reader, and `CONFIG_SYS_NAND_U_BOOT_OFFS=0x80000` matching
-  the `uboot` partition.
+- **SD and NAND use different U-Boot images.** `u-boot.img` (2025.01) is loaded by
+  the SPL from the FAT partition of the SD card. `uboot.bin` (2016.03) is loaded
+  by the SPL from the NAND `uboot` partition and carries the NAND boot commands
+  (`bootcmd=run $modeboot`). The installer writes `uboot.bin`; writing
+  `u-boot.img` to NAND does not give a bootable system.
+- **NAND must use on-die ECC.** The board DTS sets `nand-ecc-mode = "on-die"`,
+  `nand-on-flash-bbt` and the author's timings. The BootROM and the SPL read the
+  partitions with the chip's on-die ECC (Micron `2c:da`). If the kernel writes
+  them with hardware ECC, the board does not start: the red LED lights and there
+  is no console output. The installer refuses `--full` unless `boot.bin` contains
+  the NAND driver (`OnDie ECC` marker); `--force` bypasses the check for recovery.
 - The script does not create the partition table and does not change the device
   tree.
 - It does not verify the filesystem after writing; that is done by the build

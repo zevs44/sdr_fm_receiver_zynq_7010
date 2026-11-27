@@ -3,23 +3,33 @@ new file mode 100644
 index 0000000..52afad0
 --- /dev/null
 +++ b/target/linux/zynq/patches/0004-dts-antminer-s9-nand.patch
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,58 @@
 +diff --git a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
 +index 136d0ac..9d3946f 100644
 +--- a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
 ++++ b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
-+@@ -178,3 +178,43 @@
++@@ -178,3 +178,53 @@
 + 		};
 + 	};
 + };
 ++
 ++/*
-++ * Разделы NAND — раскладка автора (второй репозиторий Antminer_S9_OpenWRT).
-++ * Метки обязаны совпадать с nand_install: boot, uboot, fpga, uboot_env,
-++ * kernel, rootfs.
+++ * Параметры NAND — из DTS автора (второй репозиторий Antminer_S9_OpenWRT).
+++ * ECC on-die обязателен: по этой схеме пишут mtd/BootROM/SPL, иначе
+++ * загрузчик не прочитает раздел boot и плата не стартует.
 ++ */
 ++&nfc0 {
 ++	nand@0 {
+++		arm,nand-cycle-t0 = <0x02>;
+++		arm,nand-cycle-t1 = <0x02>;
+++		arm,nand-cycle-t2 = <0x00>;
+++		arm,nand-cycle-t3 = <0x01>;
+++		arm,nand-cycle-t4 = <0x01>;
+++		arm,nand-cycle-t5 = <0x01>;
+++		arm,nand-cycle-t6 = <0x02>;
+++		nand-bus-width = <0x08>;
+++		nand-ecc-mode = "on-die";
+++		nand-on-flash-bbt;
 ++		partitions {
 ++			compatible = "fixed-partitions";
 ++			#address-cells = <1>;
