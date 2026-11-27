@@ -765,5 +765,5 @@ the common cases:
 
 ## License
 
-The repository is marked UNLICENSED: see [`LICENSE`](LICENSE). Third-party binaries keep
-their original licenses; sources and license names are listed in [`NOTICE`](NOTICE).
+The repository is marked UNLICENSED: see [`LICENSE`](LICENSE). Third-party
+binaries keep their original licenses.
