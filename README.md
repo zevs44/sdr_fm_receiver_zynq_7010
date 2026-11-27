@@ -761,3 +761,9 @@ the common cases:
    front end.
 4. Set `CONTROLS` (`0x18`) to unmute and enable the features you want, and
    read `STATUS` (`0x10`) / the RDS registers to monitor reception.
+
+
+## License
+
+The repository is marked UNLICENSED: see `LICENSE`. Third-party binaries keep
+their original licenses; sources and license names are listed in `NOTICE`.
