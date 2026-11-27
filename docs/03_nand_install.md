@@ -56,6 +56,23 @@ install entry works only within 10 minutes after it.
 
 ## Limits
 
+- **The system does not boot without the SD card.** This U-Boot reads its
+  environment from `uboot_env.bin` on the FAT partition of the SD card. With the
+  card removed the board falls back to the built-in Xilinx environment, which
+  does not know this NAND layout. A test on 2026-11-27 confirmed it: after the
+  install the board was powered up without the card, the SPL still selected MMC
+  and stopped. The `uboot_env` partition in NAND is read only by `fw_printenv`
+  on the Linux side. Booting from NAND needs a bootloader whose environment
+  lives in NAND, and the NAND boot mode (`0 1 0 0`). Until then the install
+  writes a verified copy of the system, not a boot medium.
+- **The shipped bootloader cannot boot from NAND.** `bootloader/boot.bin` has no
+  NAND driver: the binary contains no `NAND device` strings and its boot-mode
+  switch has no NAND branch. In NAND boot mode the board shows a lit red LED and
+  no console output. The script now refuses `--full` unless `boot.bin` contains a
+  NAND driver; `--force` bypasses the check for recovery only. A NAND-capable SPL
+  must be built separately: mainline U-Boot with `SPL_NAND_SUPPORT`, a
+  fixed-geometry SPL reader, and `CONFIG_SYS_NAND_U_BOOT_OFFS=0x80000` matching
+  the `uboot` partition.
 - The script does not create the partition table and does not change the device
   tree.
 - It does not verify the filesystem after writing; that is done by the build

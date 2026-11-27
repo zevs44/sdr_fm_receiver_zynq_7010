@@ -9,6 +9,9 @@
 # работающей системы: так исключаются временные файлы и сама SD-карта.
 #
 # Использование: nand_install [--full|--system] [--dry-run] [--yes] [--force]
+#
+# Сообщения консоли — на английском: журнал читают в конвейере и при разборе
+# с другой машины. Комментарии остаются на языке проекта.
 
 set -eu
 
@@ -35,18 +38,18 @@ YES=0
 FORCE=0
 
 log() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOG"; }
-die() { printf 'ОШИБКА: %s\n' "$*" | tee -a "$LOG" >&2; exit 1; }
+die() { printf 'ERROR: %s\n' "$*" | tee -a "$LOG" >&2; exit 1; }
 
 usage() {
 	cat <<EOF
-Использование: nand_install [--full|--system] [--dry-run] [--yes] [--force]
+Usage: nand_install [--full|--system] [--dry-run] [--yes] [--force]
 
-  --full      записать всё: система + загрузчик (по умолчанию)
-  --system    только корневую ФС в UBI, загрузчик не трогать
-  --dry-run   проверить и показать план, не записывая
-  --yes       не спрашивать подтверждение
-  --force     пропустить проверку метки dry-run
-  -h, --help  эта справка
+  --full      write everything: system and bootloader (default)
+  --system    write the root filesystem to UBI only, leave the bootloader
+  --dry-run   run all checks and print the plan, write nothing
+  --yes       do not ask for confirmation
+  --force     skip the dry-run stamp check and the NAND-capability check
+  -h, --help  this help
 EOF
 }
 
@@ -58,16 +61,16 @@ while [ $# -gt 0 ]; do
 		--yes)     YES=1 ;;
 		--force)   FORCE=1 ;;
 		-h|--help) usage; exit 0 ;;
-		*) echo "Неизвестный аргумент: $1" >&2; usage; exit 2 ;;
+		*) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
 	esac
 	shift
 done
 
-[ "$(id -u)" -eq 0 ] || die "нужны права root"
+[ "$(id -u)" -eq 0 ] || die "root privileges required"
 
 # --- 1. Проверка источника загрузки ------------------------------------------
 case "$(cat /proc/cmdline)" in
-	*root=ubi*) die "система загружена из NAND — запись повредит её; загрузитесь с SD" ;;
+	*root=ubi*) die "system booted from NAND — writing would damage it; boot from the SD card" ;;
 esac
 
 # --- 2. Разделы NAND ---------------------------------------------------------
@@ -78,33 +81,48 @@ mtd_size() {
 	awk -v n="$1" '$4 == "\"" n "\"" { print $2 }' /proc/mtd
 }
 for p in $PARTS; do
-	[ -n "$(mtd_idx "$p")" ] || die "в /proc/mtd нет раздела $p"
+	[ -n "$(mtd_idx "$p")" ] || die "no partition $p in /proc/mtd"
 done
 
 # --- 3. SD-карта -------------------------------------------------------------
+# mountpoint есть не во всех сборках BusyBox: проверяем таблицу монтирования.
+is_mounted() {
+	awk -v m="$1" '$2 == m { found = 1 } END { exit !found }' /proc/mounts
+}
 mkdir -p "$MNT"
-mountpoint -q "$MNT" || mount -t vfat -o ro "$SD_DEV" "$MNT" || die "не смонтировать $SD_DEV"
+is_mounted "$MNT" || mount -t vfat -o ro "$SD_DEV" "$MNT" || die "cannot mount $SD_DEV"
 
 # --- 4. Файлы, сигнатуры и размеры -------------------------------------------
 sig() { dd if="$MNT/$1" bs=1 count="$2" 2>/dev/null | md5sum | cut -d' ' -f1; }
 check_sig() {
-	[ "$(sig "$1" "$2")" = "$3" ] || die "файл $1 не похож на ожидаемый ($4)"
+	[ "$(sig "$1" "$2")" = "$3" ] || die "file $1 does not look like the expected one ($4)"
 }
 file_size() { wc -c < "$MNT/$1"; }
 part_size() { printf '%d' "$((0x$(mtd_size "$1")))"; }
 
 for f in boot.bin u-boot.img uboot_env.bin system.bit.gz fit.itb; do
-	[ -f "$MNT/$f" ] || die "нет файла $f на SD-карте"
+	[ -f "$MNT/$f" ] || die "missing file $f on the SD card"
 done
 
+# Загрузчик должен уметь читать NAND: SPL без драйвера NAND в режиме NAND
+# не стартует (проверено на плате 2026-11-27 — красный индикатор, загрузки нет).
+# Признак — строки драйвера в boot.bin. Обход только для восстановления: --force.
+spl_has_string() {
+	dd if="$MNT/boot.bin" bs=65536 2>/dev/null | tr -d '\000' | grep -q "$1"
+}
+if [ "$MODE" = full ] && [ "$FORCE" != 1 ]; then
+	spl_has_string "NAND device" ||
+		die "boot.bin has no NAND driver: NAND boot is impossible (use --force only for recovery)"
+fi
+
 if [ "$MODE" = full ]; then
-	check_sig boot.bin 4 "$MD5_FSBL" "начало FSBL"
-	check_sig u-boot.img 4 "$MD5_UIMAGE" "заголовок uImage"
+	check_sig boot.bin 4 "$MD5_FSBL" "FSBL start"
+	check_sig u-boot.img 4 "$MD5_UIMAGE" "uImage header"
 	check_sig system.bit.gz 2 "$MD5_GZIP" "gzip"
 	check_sig fit.itb 4 "$MD5_FIT" "FIT"
 	check_size() {
 		[ "$(file_size "$1")" -le "$(part_size "$2")" ] ||
-			die "$1 ($(file_size "$1") Б) больше раздела $2 ($(part_size "$2") Б)"
+			die "$1 ($(file_size "$1") B) is larger than partition $2 ($(part_size "$2") B)"
 	}
 	check_size boot.bin boot
 	check_size u-boot.img uboot
@@ -116,73 +134,77 @@ fi
 rom_size="$(du -sk /rom | awk '{ print $1 * 1024 }')"
 rootfs_size="$(part_size rootfs)"
 [ "$rom_size" -le "$rootfs_size" ] ||
-	die "система ($rom_size Б) не помещается в раздел rootfs ($rootfs_size Б)"
+	die "system ($rom_size B) does not fit into the rootfs partition ($rootfs_size B)"
 
-log "режим=$MODE dry-run=$DRY_RUN"
-log "разделы: $(for p in $PARTS; do printf '%s=mtd%s ' "$p" "$(mtd_idx "$p")"; done)"
-log "rootfs: /rom $rom_size Б, раздел $rootfs_size Б"
+log "mode=$MODE dry-run=$DRY_RUN"
+log "partitions: $(for p in $PARTS; do printf '%s=mtd%s ' "$p" "$(mtd_idx "$p")"; done)"
+log "rootfs: /rom $rom_size B, partition $rootfs_size B"
 
 # --- 5. Пробный запуск -------------------------------------------------------
 if [ "$DRY_RUN" = 1 ]; then
 	printf '%s|%s|%s\n' "$MODE" "$(date +%s)" "$rom_size" > "$STAMP"
-	log "план проверен, метка создана; запись не выполнялась"
+	log "plan verified, stamp created; nothing was written"
 	umount "$MNT" 2>/dev/null || true
 	exit 0
 fi
 
 # --- 6. Метка dry-run --------------------------------------------------------
 if [ "$FORCE" != 1 ]; then
-	[ -f "$STAMP" ] || die "сначала запустите --dry-run"
+	[ -f "$STAMP" ] || die "run --dry-run first"
 	IFS='|' read -r s_mode s_time s_rom < "$STAMP"
-	[ "$s_mode" = "$MODE" ] || die "метка от другого режима"
-	[ "$s_rom" = "$rom_size" ] || die "метка от другого состояния /rom"
+	[ "$s_mode" = "$MODE" ] || die "stamp belongs to another mode"
+	[ "$s_rom" = "$rom_size" ] || die "stamp belongs to another /rom state"
 	[ $(( $(date +%s) - s_time )) -le "$STAMP_TTL" ] ||
-		die "метка устарела (${STAMP_TTL} с), повторите --dry-run"
+		die "stamp expired (${STAMP_TTL} s), repeat --dry-run"
 fi
 
 # --- 7. Подтверждение --------------------------------------------------------
 if [ "$YES" != 1 ]; then
-	printf 'Введите INSTALL для подтверждения: '
+	printf 'Type INSTALL to confirm: '
 	read -r ans
-	[ "$ans" = "INSTALL" ] || die "отменено"
+	[ "$ans" = "INSTALL" ] || die "cancelled"
 fi
 
 # --- 8. Блокировка -----------------------------------------------------------
 exec 9>"$LOCK"
-flock -n 9 || die "другой nand_install уже выполняется"
+flock -n 9 || die "another nand_install is already running"
 
 # --- 9. Запись корневой ФС (первый этап) -------------------------------------
 rootfs_mtd="$(mtd_idx rootfs)"
-log "запись корневой ФС в UBI (mtd$rootfs_mtd)"
-ubiformat "/dev/mtd$rootfs_mtd" -y || die "ubiformat"
-ubiattach -m "$rootfs_mtd" -d 0 || die "ubiattach"
-ubimkvol /dev/ubi0 -N rootfs -m || die "ubimkvol"
+log "writing the root filesystem to UBI (mtd$rootfs_mtd)"
+ubiformat "/dev/mtd$rootfs_mtd" -y || die "ubiformat failed"
+ubiattach -m "$rootfs_mtd" -d 0 || die "ubiattach failed"
+ubimkvol /dev/ubi0 -N rootfs -m || die "ubimkvol failed"
 mkdir -p /mnt/ubi
-mount -t ubifs ubi0:rootfs /mnt/ubi || die "не смонтировать новый UBI-том"
-cp -a /rom/. /mnt/ubi/ || die "копирование /rom"
+mount -t ubifs ubi0:rootfs /mnt/ubi || die "cannot mount the new UBI volume"
+cp -a /rom/. /mnt/ubi/ || die "copying /rom failed"
 sync
 umount /mnt/ubi
 ubidetach -m "$rootfs_mtd"
-log "корневая ФС записана"
+log "root filesystem written"
 
 # --- 10. Загрузчик и ядро (второй этап) --------------------------------------
 if [ "$MODE" = full ]; then
-	log "запись загрузчика, битстрима и ядра"
-	mtd write "$MNT/boot.bin" boot || die "mtd write boot"
-	mtd write "$MNT/u-boot.img" uboot || die "mtd write uboot"
-	mtd write "$MNT/uboot_env.bin" uboot_env || die "mtd write uboot_env"
-	mtd write "$MNT/system.bit.gz" fpga || die "mtd write fpga"
-	mtd write "$MNT/fit.itb" kernel || die "mtd write kernel"
+	log "writing bootloader, bitstream and kernel"
+	mtd write "$MNT/boot.bin" boot || die "mtd write boot failed"
+	mtd write "$MNT/u-boot.img" uboot || die "mtd write uboot failed"
+	mtd write "$MNT/uboot_env.bin" uboot_env || die "mtd write uboot_env failed"
+	mtd write "$MNT/system.bit.gz" fpga || die "mtd write fpga failed"
+	mtd write "$MNT/fit.itb" kernel || die "mtd write kernel failed"
 	sync
 
-	log "проверка чтением"
-	mtd verify "$MNT/boot.bin" boot || die "verify boot"
-	mtd verify "$MNT/u-boot.img" uboot || die "verify uboot"
-	mtd verify "$MNT/uboot_env.bin" uboot_env || die "verify uboot_env"
-	mtd verify "$MNT/system.bit.gz" fpga || die "verify fpga"
-	mtd verify "$MNT/fit.itb" kernel || die "verify kernel"
-	log "загрузчик записан и проверен"
+	log "verifying by read-back"
+	mtd verify "$MNT/boot.bin" boot || die "verify boot failed"
+	mtd verify "$MNT/u-boot.img" uboot || die "verify uboot failed"
+	mtd verify "$MNT/uboot_env.bin" uboot_env || die "verify uboot_env failed"
+	mtd verify "$MNT/system.bit.gz" fpga || die "verify fpga failed"
+	mtd verify "$MNT/fit.itb" kernel || die "verify kernel failed"
+	log "bootloader written and verified"
 fi
 
 umount "$MNT" 2>/dev/null || true
-log "готово: выключите питание и выньте SD-карту"
+log "done: files are written and verified"
+# Предупреждение обязательно: этот загрузчик читает окружение с FAT-раздела
+# SD-карты, поэтому без карты плата не стартует. Разбор — docs/03_nand_install.md.
+log "note: this bootloader reads its environment from the SD card; without the card"
+log "      the board will not start — see docs/03_nand_install.md"
