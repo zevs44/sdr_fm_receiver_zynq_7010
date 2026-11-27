@@ -14,11 +14,11 @@ if uci -q show luci 2>/dev/null | grep -qF "NAND: dry-run"; then
 fi
 
 uci -q add luci command >/dev/null 2>&1 || exit 0
-uci -q set luci.@command[-1].name='NAND: dry-run (без записи)'
+uci -q set luci.@command[-1].name='NAND: dry-run (nothing written)'
 uci -q set luci.@command[-1].command='/sbin/nand_install --dry-run'
 
 uci -q add luci command >/dev/null 2>&1 || exit 0
-uci -q set luci.@command[-1].name='NAND: установка (после dry-run)'
+uci -q set luci.@command[-1].name='NAND: install (after dry-run)'
 uci -q set luci.@command[-1].command='/sbin/nand_install --yes'
 
 uci -q commit luci

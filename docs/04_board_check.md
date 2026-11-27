@@ -84,8 +84,8 @@ scp root@<board-address>:/tmp/run-diag-board.log ./run-diag-board.log
 
 ### Over LuCI
 
-`System` → `Commands` → `DIAG: проверка платы` (or `DIAG: проверка платы со
-звуком`). The buttons are created by `/etc/uci-defaults/91_board_scripts` on the
+`System` → `Commands` → `DIAG: board check` (or `DIAG: board check with
+sound`). The buttons are created by `/etc/uci-defaults/91_board_scripts` on the
 first boot.
 
 ### Parameters
@@ -102,9 +102,9 @@ first boot.
 ## Reading the output
 
 ```
-PASS  система: OpenWrt 25.12.6
-FAIL  карта ALSA: нет карты «audio» в /proc/asound/cards
-SKIP  разделы NAND: в QEMU NAND не эмулируется
+PASS  system: OpenWrt 25.12.6
+FAIL  ALSA card: no "audio" card in /proc/asound/cards
+SKIP  NAND partitions: NAND is not emulated in QEMU
 TOTAL pass=17 fail=1 skip=4
 RESULT: FAIL
 ```

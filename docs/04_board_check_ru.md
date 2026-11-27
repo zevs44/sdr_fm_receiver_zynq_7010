@@ -84,8 +84,8 @@ scp root@<адрес-платы>:/tmp/run-diag-board.log ./run-diag-board.log
 
 ### Через LuCI
 
-`Система` → `Команды` → `DIAG: проверка платы` (или `DIAG: проверка платы со
-звуком`). Кнопки создаёт `/etc/uci-defaults/91_board_scripts` при первой загрузке.
+`Система` → `Команды` → `DIAG: board check` (или `DIAG: board check with
+sound`). Кнопки создаёт `/etc/uci-defaults/91_board_scripts` при первой загрузке.
 
 ### Параметры
 
@@ -101,12 +101,15 @@ scp root@<адрес-платы>:/tmp/run-diag-board.log ./run-diag-board.log
 ## Как читать вывод
 
 ```
-PASS  система: OpenWrt 25.12.6
-FAIL  карта ALSA: нет карты «audio» в /proc/asound/cards
-SKIP  разделы NAND: в QEMU NAND не эмулируется
+PASS  system: OpenWrt 25.12.6
+FAIL  ALSA card: no "audio" card in /proc/asound/cards
+SKIP  NAND partitions: NAND is not emulated in QEMU
 TOTAL pass=17 fail=1 skip=4
 RESULT: FAIL
 ```
+
+Строки проверок печатаются на английском: тот же вывод читают конвейер и
+разбор журнала. Комментарии в скриптах остаются на языке проекта.
 
 - `FAIL` — проверка не прошла: образ или плата отличаются от ожидаемого.
 - `SKIP` — проверка неприменима в этом профиле или в этих условиях; это не ошибка.

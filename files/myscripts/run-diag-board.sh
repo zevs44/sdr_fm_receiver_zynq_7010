@@ -13,34 +13,53 @@
 # Итог: «TOTAL pass=N fail=N skip=N» и «RESULT: PASS|FAIL».
 # Код возврата: 0 — ни одного FAIL, 1 — есть FAIL, 2 — неверные аргументы.
 #
-# Запуск: UART (консоль), ssh, LuCI («DIAG: проверка платы»), конвейер CI.
-# Описание проверок и ожидаемых ответов — docs/board-check.ru.md.
+# Запуск: UART (консоль), ssh, LuCI («DIAG: board check»), конвейер CI.
+# Описание проверок и ожидаемых ответов — docs/04_board_check_ru.md.
+#
+# Сообщения консоли — на английском: тот же вывод читают конвейер и разбор
+# журнала. Комментарии остаются на языке проекта.
 
 PROFILE=board
 LOG=/tmp/run-diag-board.log
 SOUND=0
 FULL=0
 
+usage() {
+	cat <<EOF
+Usage: run-diag-board.sh [options]
+
+  --profile board|qemu   board (default) runs every check; qemu skips FPGA and NAND
+  --log <file>           duplicate the output into a file (default /tmp/run-diag-board.log)
+  --sound                add a 1 kHz playback check (about 5 seconds)
+  --full                 add the full dmesg and logread
+  -h, --help             this help
+
+Result lines: PASS|FAIL|SKIP  check: detail
+Summary: TOTAL pass=N fail=N skip=N and RESULT: PASS|FAIL
+Exit code: 0 — no FAIL, 1 — at least one FAIL, 2 — bad arguments
+EOF
+}
+
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--profile)
 			PROFILE="${2:-}"
-			[ -n "$PROFILE" ] || { printf 'нужно значение: board|qemu\n' >&2; exit 2; }
+			[ -n "$PROFILE" ] || { printf 'value required: board|qemu\n' >&2; exit 2; }
 			shift 2
 			;;
 		--log)
 			LOG="${2:-}"
-			[ -n "$LOG" ] || { printf 'нужен путь к файлу\n' >&2; exit 2; }
+			[ -n "$LOG" ] || { printf 'a file path is required\n' >&2; exit 2; }
 			shift 2
 			;;
 		--sound) SOUND=1; shift ;;
 		--full)  FULL=1; shift ;;
 		-h|--help)
-			sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+			usage
 			exit 0
 			;;
 		*)
-			printf 'Неизвестный аргумент: %s\n' "$1" >&2
+			printf 'Unknown argument: %s\n' "$1" >&2
 			exit 2
 			;;
 	esac
@@ -48,7 +67,7 @@ done
 
 case "$PROFILE" in
 	board|qemu) ;;
-	*) printf 'Профиль должен быть board или qemu, получено: %s\n' "$PROFILE" >&2; exit 2 ;;
+	*) printf 'Profile must be board or qemu, got: %s\n' "$PROFILE" >&2; exit 2 ;;
 esac
 
 # Журнал — копия вывода для передачи на анализ. Если файл недоступен,
@@ -88,71 +107,71 @@ show() {
 		emit "$out"
 	fi
 	if [ "$rc" -ne 0 ]; then
-		emit "(код возврата $rc)"
+		emit "(exit code $rc)"
 	fi
 }
 
 DT=/sys/firmware/devicetree/base
 
 # ── Отметка запуска ──────────────────────────────────────────────────────
-emit "run-diag-board.sh: проверка платы Antminer S9"
-emit "профиль   : $PROFILE"
-emit "дата      : $(date)"
+emit "run-diag-board.sh: Antminer S9 board diagnostics"
+emit "profile   : $PROFILE"
+emit "date      : $(date)"
 emit "hostname  : $(cat /proc/sys/kernel/hostname 2>/dev/null)"
-emit "ядро      : $(uname -r)"
-emit "команда   : $(cat /proc/cmdline)"
-emit "журнал    : ${LOG:-только консоль}"
+emit "kernel    : $(uname -r)"
+emit "cmdline   : $(cat /proc/cmdline)"
+emit "log       : ${LOG:-console only}"
 
 # ── 1. Система ───────────────────────────────────────────────────────────
-sec "1. система"
+sec "1. system"
 show "openwrt_release" cat /etc/openwrt_release
 if [ -f /etc/openwrt_release ] && grep -q '^DISTRIB_ID=' /etc/openwrt_release; then
 	rel=$(sed -n 's/^DISTRIB_RELEASE=//p' /etc/openwrt_release)
-	pass "система: OpenWrt $rel"
+	pass "system: OpenWrt $rel"
 else
-	fail "система: /etc/openwrt_release отсутствует или без DISTRIB_ID"
+	fail "system: /etc/openwrt_release is missing or has no DISTRIB_ID"
 fi
 if [ "$(awk '$2 == "/rom" { print $3 }' /proc/mounts)" = "squashfs" ]; then
-	pass "корневая система: squashfs смонтирована в /rom"
+	pass "root filesystem: squashfs mounted at /rom"
 else
-	fail "корневая система: /rom не смонтирован как squashfs"
+	fail "root filesystem: /rom is not mounted as squashfs"
 fi
 
 total=$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)
 if [ "${total:-0}" -ge 400000 ]; then
-	pass "память: $((total / 1024)) Мб"
+	pass "memory: $((total / 1024)) MB"
 else
-	fail "память: ${total:-0} Кб — меньше ожидаемых 400 000 Кб"
+	fail "memory: ${total:-0} kB is less than the expected 400000 kB"
 fi
 
 # ── 2. Каталог пользовательских скриптов ─────────────────────────────────
-sec "2. каталог /myscripts"
+sec "2. /myscripts directory"
 # В образе нет утилит stat и hostname: права берём из ls, имя — из /proc.
 perm_of() { ls -ld "$1" 2>/dev/null | awk '{print $1}'; }
 if [ -d /myscripts ]; then
 	perm=$(perm_of /myscripts)
 	if [ "$perm" = "drwxrwxrwx" ]; then
-		pass "каталог /myscripts с правами 777"
+		pass "directory /myscripts has mode 777"
 	else
-		fail "каталог /myscripts с правами ${perm:-неизвестно} вместо drwxrwxrwx"
+		fail "directory /myscripts has mode ${perm:-unknown} instead of drwxrwxrwx"
 	fi
 else
-	fail "каталога /myscripts нет"
+	fail "directory /myscripts is missing"
 fi
 if [ -x /myscripts/run-diag-board.sh ]; then
-	pass "скрипт /myscripts/run-diag-board.sh на месте"
+	pass "script /myscripts/run-diag-board.sh is present"
 	perm=$(perm_of /myscripts/run-diag-board.sh)
 	if [ "$perm" = "-rwxrwxrwx" ]; then
-		pass "скрипт /myscripts/run-diag-board.sh с правами 777"
+		pass "script /myscripts/run-diag-board.sh has mode 777"
 	else
-		fail "скрипт /myscripts/run-diag-board.sh с правами ${perm:-неизвестно} вместо -rwxrwxrwx"
+		fail "script /myscripts/run-diag-board.sh has mode ${perm:-unknown} instead of -rwxrwxrwx"
 	fi
 else
-	fail "скрипта /myscripts/run-diag-board.sh нет"
+	fail "script /myscripts/run-diag-board.sh is missing"
 fi
 
 # ── 3. Дерево устройства ─────────────────────────────────────────────────
-sec "3. дерево устройства"
+sec "3. device tree"
 missing=""
 for n in axi_i2s_adi@43c00000 fm-radio@43c60000 sound audio_clock; do
 	if [ ! -e "$DT/$n" ]; then
@@ -160,9 +179,9 @@ for n in axi_i2s_adi@43c00000 fm-radio@43c60000 sound audio_clock; do
 	fi
 done
 if [ -z "$missing" ]; then
-	pass "узлы FPGA в DT: axi_i2s_adi, fm-radio, sound, audio_clock"
+	pass "FPGA nodes in DT: axi_i2s_adi, fm-radio, sound, audio_clock"
 else
-	fail "в DT нет узлов:$missing"
+	fail "DT is missing nodes:$missing"
 fi
 
 labels=$(find "$DT" -type f -name label -path '*partition*' -exec cat {} \; 2>/dev/null | tr '\000' '\n')
@@ -171,48 +190,48 @@ for l in boot uboot fpga uboot_env kernel rootfs; do
 	printf '%s\n' "$labels" | grep -qx "$l" || missing="$missing $l"
 done
 if [ -z "$missing" ]; then
-	pass "разделы NAND в DT: шесть меток"
+	pass "NAND partitions in DT: six labels"
 else
-	fail "в DT нет разделов:$missing"
+	fail "DT is missing partitions:$missing"
 fi
 
 if grep -q 'earlyprintk' /proc/cmdline; then
-	fail "командная строка: лишний параметр earlyprintk"
+	fail "kernel command line: extra earlyprintk parameter"
 else
-	pass "командная строка: без earlyprintk"
+	pass "kernel command line: no earlyprintk"
 fi
 
 # ── 4. Радиотракт ────────────────────────────────────────────────────────
-sec "4. радиотракт"
+sec "4. radio path"
 if [ "$PROFILE" = "qemu" ]; then
-	skip "драйвер радио: FPGA в QEMU не эмулируется"
+	skip "radio driver: FPGA is not emulated in QEMU"
 else
 	if [ -e /dev/radio0 ]; then
-		pass "драйвер радио: /dev/radio0"
+		pass "radio driver: /dev/radio0"
 	else
-		fail "драйвер радио: нет /dev/radio0"
+		fail "radio driver: /dev/radio0 is missing"
 	fi
 	show "v4l2-ctl --list-devices" v4l2-ctl --list-devices
 fi
 
 # ── 5. Звук ──────────────────────────────────────────────────────────────
-sec "5. звук"
+sec "5. sound"
 if [ "$PROFILE" = "qemu" ]; then
-	skip "карта ALSA: FPGA в QEMU не эмулируется"
+	skip "ALSA card: FPGA is not emulated in QEMU"
 else
 	if [ -r /proc/asound/cards ] && grep -q 'audio' /proc/asound/cards; then
-		pass "карта ALSA: sound-card «audio»"
+		pass "ALSA card: sound card \"audio\""
 	else
-		fail "карта ALSA: нет карты «audio» в /proc/asound/cards"
+		fail "ALSA card: no \"audio\" card in /proc/asound/cards"
 	fi
 	show "aplay -l" aplay -l
 	if [ "$SOUND" = "1" ]; then
-		emit "проверка воспроизведения: тон 1 кГц, 5 секунд; выход — J2 (PDM)"
+		emit "playback check: 1 kHz tone, 5 seconds; output J2 (PDM)"
 		show "speaker-test" speaker-test -D hw:0,0 -c 2 -t sine -l 1
 		if [ -r /proc/asound/cards ] && grep -q 'audio' /proc/asound/cards; then
-			pass "воспроизведение: поток открылся"
+			pass "playback: stream opened"
 		else
-			fail "воспроизведение: карта недоступна"
+			fail "playback: card unavailable"
 		fi
 	fi
 fi
@@ -220,113 +239,115 @@ fi
 # ── 6. NAND ──────────────────────────────────────────────────────────────
 sec "6. NAND"
 if [ "$PROFILE" = "qemu" ]; then
-	skip "разделы NAND: в QEMU NAND не эмулируется"
-	skip "окружение U-Boot: в QEMU раздел uboot_env недоступен"
-	skip "nand_install --dry-run: в QEMU нет NAND и SD-карты как /dev/mmcblk0p1"
+	skip "NAND partitions: NAND is not emulated in QEMU"
+	skip "U-Boot environment: the uboot_env partition is unavailable in QEMU"
+	skip "nand_install --dry-run: QEMU has no NAND and no SD card as /dev/mmcblk0p1"
 else
-	if [ -s /proc/mtd ]; then
+	# /proc/mtd — файл procfs: его stat-размер всегда 0, поэтому `-s` даёт
+	# ложный FAIL. Проверяем читаемость и наличие строк с разделами (П16).
+	if [ -r /proc/mtd ] && grep -q '^mtd[0-9]' /proc/mtd; then
 		missing=""
 		for l in boot uboot fpga uboot_env kernel rootfs; do
 			grep -q "\"$l\"" /proc/mtd || missing="$missing $l"
 		done
 		if [ -z "$missing" ]; then
-			pass "разделы NAND: /proc/mtd с шестью метками"
+			pass "NAND partitions: /proc/mtd has six labels"
 		else
-			fail "в /proc/mtd нет:$missing"
+			fail "/proc/mtd is missing:$missing"
 		fi
 	else
-		fail "разделы NAND: /proc/mtd пуст — драйвер не загрузился"
+		fail "NAND partitions: /proc/mtd is empty — the driver did not load"
 	fi
 	show "cat /proc/mtd" cat /proc/mtd
 
 	if [ -f /etc/fw_env.config ]; then
-		pass "окружение U-Boot: /etc/fw_env.config на месте"
+		pass "U-Boot environment: /etc/fw_env.config is present"
 	else
-		fail "окружение U-Boot: нет /etc/fw_env.config"
+		fail "U-Boot environment: /etc/fw_env.config is missing"
 	fi
 	if command -v fw_printenv >/dev/null 2>&1; then
 		if fw_printenv >/dev/null 2>&1; then
-			pass "окружение U-Boot: fw_printenv читается"
+			pass "U-Boot environment: fw_printenv reads it"
 		else
-			fail "окружение U-Boot: fw_printenv завершился ошибкой"
+			fail "U-Boot environment: fw_printenv exited with an error"
 		fi
 	else
-		skip "окружение U-Boot: утилиты fw_printenv нет"
+		skip "U-Boot environment: fw_printenv utility is missing"
 	fi
 
 	if command -v nand_install >/dev/null 2>&1; then
 		if nand_install --dry-run >/dev/null 2>&1; then
-			pass "nand_install --dry-run: план проверен"
+			pass "nand_install --dry-run: plan verified"
 		else
-			fail "nand_install --dry-run: завершился ошибкой"
+			fail "nand_install --dry-run: exited with an error"
 		fi
 	else
-		fail "nand_install: утилиты нет в системе"
+		fail "nand_install: utility is missing from the system"
 	fi
 fi
 
 # ── 7. Сеть, MAC, hostname ───────────────────────────────────────────────
-sec "7. сеть"
+sec "7. network"
 if [ "$PROFILE" = "qemu" ]; then
-	skip "сеть: интерфейс платы в QEMU не эмулируется"
+	skip "network: the board interface is not emulated in QEMU"
 else
 	if ip link show eth0 >/dev/null 2>&1; then
-		pass "сеть: интерфейс eth0 есть"
+		pass "network: interface eth0 is present"
 		if ip -4 addr show eth0 2>/dev/null | grep -q 'inet '; then
-			pass "сеть: IPv4 получен по DHCP"
+			pass "network: IPv4 address obtained via DHCP"
 		else
-			skip "сеть: адреса нет — проверьте кабель и DHCP-сервер"
+			skip "network: no address — check the cable and the DHCP server"
 		fi
 	else
-		fail "сеть: интерфейса eth0 нет"
+		fail "network: interface eth0 is missing"
 	fi
 fi
 
 host_name=$(cat /proc/sys/kernel/hostname 2>/dev/null)
 case "$host_name" in
 	owrt-zynq7010-*) pass "hostname: $host_name" ;;
-	*) fail "hostname: ${host_name:-пусто} — ожидался owrt-zynq7010-XXXX" ;;
+	*) fail "hostname: ${host_name:-empty} — expected owrt-zynq7010-XXXX" ;;
 esac
 
 if [ -s /etc/antminer-mac ]; then
-	pass "MAC: постоянный адрес $(cat /etc/antminer-mac)"
+	pass "MAC: persistent address $(cat /etc/antminer-mac)"
 else
-	fail "MAC: нет /etc/antminer-mac"
+	fail "MAC: /etc/antminer-mac is missing"
 fi
 
 if [ "$(uci -q get network.lan.proto)" = "dhcp" ]; then
-	pass "настройка сети: lan по DHCP"
+	pass "network configuration: lan uses DHCP"
 else
-	fail "настройка сети: network.lan.proto = «$(uci -q get network.lan.proto)» вместо dhcp"
+	fail "network configuration: network.lan.proto = \"$(uci -q get network.lan.proto)\" instead of dhcp"
 fi
 
 # ── 8. Службы и LuCI ─────────────────────────────────────────────────────
-sec "8. службы"
+sec "8. services"
 if [ -f /www/cgi-bin/luci ]; then
-	pass "LuCI: /www/cgi-bin/luci на месте"
+	pass "LuCI: /www/cgi-bin/luci is present"
 else
-	fail "LuCI: нет /www/cgi-bin/luci"
+	fail "LuCI: /www/cgi-bin/luci is missing"
 fi
 if [ "$PROFILE" = "qemu" ]; then
-	skip "служба uhttpd: в QEMU без сети не проверяется"
+	skip "uhttpd service: not checked in QEMU without network"
 else
 	if /etc/init.d/uhttpd status >/dev/null 2>&1; then
-		pass "служба uhttpd: запущена"
+		pass "uhttpd service: running"
 	else
-		fail "служба uhttpd: не запущена"
+		fail "uhttpd service: not running"
 	fi
 fi
 tail_log=$(logread 2>/dev/null | tail -n 15)
 if [ -n "$tail_log" ]; then
-	emit "--- logread (хвост) ---"
+	emit "--- logread (tail) ---"
 	emit "$tail_log"
 fi
 
 # ── 9. Полные журналы ────────────────────────────────────────────────────
 if [ "$FULL" = "1" ]; then
-	sec "9. полный dmesg"
+	sec "9. full dmesg"
 	emit "$(dmesg 2>&1)"
-	sec "9.1 полный logread"
+	sec "9.1 full logread"
 	emit "$(logread 2>&1)"
 fi
 

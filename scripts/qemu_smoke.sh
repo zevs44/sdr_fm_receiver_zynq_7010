@@ -17,22 +17,25 @@
 #
 # Зависимости: qemu-system-arm, u-boot-tools (dumpimage), mtools, fdisk,
 # gzip. Код возврата: 0 — PASS, 1 — FAIL.
+#
+# Сообщения консоли — на английском: журнал шага читают в конвейере.
+# Комментарии остаются на языке проекта.
 
 set -euo pipefail
 
-IMG_GZ="${1:?использование: qemu_smoke.sh <sdcard.img.gz> [таймаут-секунд]}"
+IMG_GZ="${1:?usage: qemu_smoke.sh <sdcard.img.gz> [timeout-seconds]}"
 TIMEOUT="${2:-180}"
 
 for t in qemu-system-arm dumpimage mcopy sfdisk gzip; do
-  command -v "$t" >/dev/null 2>&1 || { echo "ОШИБКА: нет утилиты '$t'" >&2; exit 1; }
+  command -v "$t" >/dev/null 2>&1 || { echo "ERROR: utility '$t' is missing" >&2; exit 1; }
 done
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-echo "== распаковка образа =="
+echo "== unpacking the image =="
 gzip -dc "$IMG_GZ" > "$WORK/disk.img"
-echo "   размер: $(wc -c < "$WORK/disk.img") байт"
+echo "   size: $(wc -c < "$WORK/disk.img") bytes"
 
 # Модель SD-карты в QEMU принимает только размер-степень-двойки, а образ
 # усечён (31 МБ при разделах 16 + 200 МБ). Дополняем нулями до ближайшей
@@ -43,9 +46,9 @@ while [ "$size" -lt "$need" ]; do
   size=$((size * 2))
 done
 truncate -s "$size" "$WORK/disk.img"
-echo "   размер для QEMU: $size байт"
+echo "   size for QEMU: $size bytes"
 
-echo "== поиск FAT-раздела =="
+echo "== locating the FAT partition =="
 # Номер корневого раздела не зашит: он берётся из разметки образа, чтобы
 # проверка пережила смену раскладки (root= в командной строке ядра).
 fat_off=""
@@ -60,18 +63,18 @@ while read -r start type; do
 done < <(sfdisk -d "$WORK/disk.img" 2>/dev/null \
          | sed -n 's/.*start= *\([0-9]*\), *size= *[0-9]*, *type= *\([0-9a-fA-F]*\).*/\1 \2/p')
 if [ -z "$fat_off" ]; then
-  echo "ОШИБКА: FAT-раздел не найден" >&2
+  echo "ERROR: FAT partition not found" >&2
   exit 1
 fi
 [ -n "$root_part" ] || root_part=2
-echo "   FAT по смещению $fat_off, корневой раздел — №$root_part"
+echo "   FAT at offset $fat_off, root partition #$root_part"
 
-echo "== извлечение fit.itb =="
+echo "== extracting fit.itb =="
 export MTOOLS_SKIP_CHECK=1
 mcopy -i "$WORK/disk.img@@$fat_off" ::fit.itb "$WORK/fit.itb"
 dumpimage -l "$WORK/fit.itb"
 
-echo "== извлечение ядра и DTB =="
+echo "== extracting the kernel and DTB =="
 dumpimage -l "$WORK/fit.itb" > "$WORK/fit.list"
 # Порядок образов в FIT может измениться: ищем по типу, индексы 0/1 — запасной путь.
 fit_index() {
@@ -84,7 +87,7 @@ kidx="$(fit_index "Kernel Image")"
 didx="$(fit_index "Flat Device Tree")"
 [ -n "$kidx" ] || kidx=0
 [ -n "$didx" ] || didx=1
-echo "   образы FIT: ядро #$kidx, DTB #$didx"
+echo "   FIT images: kernel #$kidx, DTB #$didx"
 
 # Адрес загрузки ядра берём из FIT: QEMU для arm32 ставит PC по заголовку
 # uImage. Прежняя сборка линкует ядро на 0x8000, но при смене конфигурации
@@ -97,7 +100,7 @@ fit_field() {
 }
 load_addr="$(fit_field "$kidx" "Load Address")"
 [ -n "$load_addr" ] || load_addr="0x8000"
-echo "   адрес загрузки ядра: $load_addr"
+echo "   kernel load address: $load_addr"
 dumpimage -T flat_dt -p "$kidx" -o "$WORK/kernel.gz" "$WORK/fit.itb" >/dev/null
 dumpimage -T flat_dt -p "$didx" -o "$WORK/board.dtb" "$WORK/fit.itb" >/dev/null
 if [ "$(head -c2 "$WORK/kernel.gz" | od -An -tx1 | tr -d ' \n')" = "1f8b" ]; then
@@ -105,16 +108,16 @@ if [ "$(head -c2 "$WORK/kernel.gz" | od -An -tx1 | tr -d ' \n')" = "1f8b" ]; the
 else
   cp "$WORK/kernel.gz" "$WORK/Image"
 fi
-echo "   ядро: $(wc -c < "$WORK/Image") байт, DTB: $(wc -c < "$WORK/board.dtb") байт"
+echo "   kernel: $(wc -c < "$WORK/Image") bytes, DTB: $(wc -c < "$WORK/board.dtb") bytes"
 
 # QEMU для arm32 грузит голый Image по 0x10000, а ядро слинковано по адресу
 # из FIT (обычно 0x8000). Заворачиваем Image в uImage с явными адресами —
 # QEMU читает их из заголовка и ставит PC правильно.
 mkimage -A arm -O linux -T kernel -C none -a "$load_addr" -e "$load_addr" \
         -n "openwrt-qemu-smoke" -d "$WORK/Image" "$WORK/kernel.uImage" >/dev/null
-echo "   uImage: $(wc -c < "$WORK/kernel.uImage") байт (load/entry $load_addr)"
+echo "   uImage: $(wc -c < "$WORK/kernel.uImage") bytes (load/entry $load_addr)"
 
-echo "== загрузка в QEMU (таймаут ${TIMEOUT}s) =="
+echo "== booting in QEMU (timeout ${TIMEOUT}s) =="
 # Консоль платы — ttyPS0 = serial@e0001000 = второй UART QEMU (serial_hd(1)),
 # поэтому первый отдаём в null, второй — в stdio. Дисплей не нужен.
 #
@@ -168,7 +171,7 @@ fi
 # применились»: успешные файлы /etc/uci-defaults удаляются в конце их обработки.
 # Поэтому ждём исчезновения наших скриптов, а не появления консоли.
 if [ "$booted" -eq 1 ]; then
-  echo "== запуск /myscripts/run-diag-board.sh (профиль qemu) =="
+  echo "== running /myscripts/run-diag-board.sh (qemu profile) =="
   printf '\n' >&3
   sleep 1
   printf 'i=0; while [ $i -lt 180 ] && { [ -e /etc/uci-defaults/99_antminer_setup ] || [ -e /etc/uci-defaults/91_board_scripts ]; }; do i=$((i+1)); sleep 1; done; /myscripts/run-diag-board.sh --profile qemu\n' >&3
@@ -189,22 +192,22 @@ if [ -n "${QEMU_LOG:-}" ]; then
   cp "$WORK/serial.log" "$QEMU_LOG"
 fi
 
-echo "== последовательная консоль (хвост) =="
+echo "== serial console (tail) =="
 tail -n 120 "$WORK/serial.log" || true
 
-echo "== итог диагностики =="
+echo "== diagnostics summary =="
 grep -aE '^(FAIL|SKIP|TOTAL|RESULT)' "$WORK/serial.log" | tail -n 40 || true
 if grep -qa "Kernel panic" "$WORK/serial.log"; then
   echo "FAIL: kernel panic" >&2
   exit 1
 fi
 if [ "$booted" -ne 1 ]; then
-  echo "FAIL: признаков загрузки нет" >&2
+  echo "FAIL: no boot signs in the log" >&2
   exit 1
 fi
 if grep -qa "RESULT: PASS" "$WORK/serial.log"; then
-  echo "PASS: система загрузилась, диагностика без FAIL"
+  printf '%s: system booted, diagnostics reported no FAIL\n' PASS
   exit 0
 fi
-echo "FAIL: диагностика сообщила RESULT: FAIL или не завершилась" >&2
+echo "FAIL: diagnostics reported RESULT: FAIL or did not finish" >&2
 exit 1

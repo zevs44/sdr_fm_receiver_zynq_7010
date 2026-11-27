@@ -8,6 +8,9 @@
 # Зачем: хеши входных файлов (загрузчик, битстрим, uEnv.txt) проверяются до
 # сборки. После любой правки этих файлов хеш нужно обновить, иначе шаг
 # «Verify input artifacts» останавливает сборку. Скрипт убирает ручной шаг.
+#
+# Сообщения консоли — на английском: журнал шага читают в конвейере.
+# Комментарии остаются на языке проекта.
 
 set -euo pipefail
 
@@ -23,12 +26,12 @@ for f in bootloader/boot.bin bootloader/u-boot.img bootloader/uboot_env.bin \
   if [ -f "$f" ]; then
     files+=("$f")
   else
-    echo "ПРЕДУПРЕЖДЕНИЕ: файла нет, пропущен: $f" >&2
+    echo "WARNING: file is missing, skipped: $f" >&2
   fi
 done
 
 if [ "${#files[@]}" -eq 0 ]; then
-  echo "ОШИБКА: нечего хешировать — нет ни одного входного файла" >&2
+  echo "ERROR: nothing to hash — no input files" >&2
   exit 1
 fi
 
@@ -42,5 +45,5 @@ fi
   sha256sum "${files[@]}" | sed 's/ \*/  /'
 } > "$OUT"
 
-echo "обновлено: $OUT"
+echo "updated: $OUT"
 sha256sum -c "$OUT"

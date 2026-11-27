@@ -16,6 +16,9 @@
 #   WARN — остальные символы (цель, размеры разделов, опции ядра).
 #
 # Код возврата: 0 — провалов нет (WARN допустимы), 1 — есть FAIL.
+#
+# Сообщения консоли — на английском: журнал шага читают в конвейере.
+# Комментарии остаются на языке проекта.
 
 set -euo pipefail
 
@@ -25,11 +28,11 @@ REQ="${2:-$HERE/configs/zynq_antminer_s9.config}"
 CONF="$OWRT/.config"
 
 if [ ! -f "$CONF" ]; then
-  echo "ОШИБКА: нет $CONF — сначала запустите scripts/apply.sh" >&2
+  echo "ERROR: $CONF is missing — run scripts/apply.sh first" >&2
   exit 1
 fi
 if [ ! -f "$REQ" ]; then
-  echo "ОШИБКА: нет запрошенного конфига $REQ" >&2
+  echo "ERROR: requested config $REQ is missing" >&2
   exit 1
 fi
 
@@ -47,9 +50,9 @@ report() {
   printf '  %-4s %-52s %s\n' "$1" "$2" "$3"
 }
 
-echo "== сверка конфига =="
-echo "   запрошен : $REQ"
-echo "   итоговый : $CONF"
+echo "== config check =="
+echo "   requested: $REQ"
+echo "   resulting: $CONF"
 echo
 
 while IFS= read -r line; do
@@ -81,7 +84,7 @@ while IFS= read -r line; do
       continue
     fi
     got="$(grep -m1 -E "^${key}=" "$CONF" | cut -d= -f2 || true)"
-    report "$level" "$key" "ожидалось n, в .config: ${got:-нет строки}"
+    report "$level" "$key" "expected n, in .config: ${got:-no line}"
     continue
   fi
 
@@ -91,9 +94,9 @@ while IFS= read -r line; do
 
   if grep -q -E "^${key}=" "$CONF"; then
     got="$(grep -m1 -E "^${key}=" "$CONF" | cut -d= -f2)"
-    report "$level" "$key" "ожидалось $want, в .config: $got"
+    report "$level" "$key" "expected $want, in .config: $got"
   else
-    report "$level" "$key" "ожидалось $want, символа в .config нет (выброшен defconfig)"
+    report "$level" "$key" "expected $want, the symbol is absent from .config (dropped by defconfig)"
   fi
 done < "$REQ"
 
@@ -107,11 +110,11 @@ done < "$REQ"
 KCONF="$(find "$OWRT/target/linux/zynq" -maxdepth 1 -name 'config-6.*' 2>/dev/null | sort | tail -1 || true)"
 if [ -z "$KCONF" ]; then
   echo
-  echo "ОШИБКА: в target/linux/zynq нет config-6.* — цель не найдена или патчи не легли." >&2
+  echo "ERROR: no config-6.* in target/linux/zynq — target not found or patches did not apply." >&2
   fail=$((fail + 1))
 else
   echo
-  echo "== опции ядра в $(basename "$KCONF") =="
+  echo "== kernel options in $(basename "$KCONF") =="
   for sym in CONFIG_SOUND CONFIG_SND CONFIG_SND_SOC_ADI_AXI_I2S \
              CONFIG_SND_SIMPLE_CARD CONFIG_MTD_RAW_NAND \
              CONFIG_MTD_NAND_PL35X CONFIG_MTD_UBI CONFIG_UBIFS_FS; do
@@ -120,17 +123,17 @@ else
       printf '  PASS %-32s\n' "$sym"
     else
       fail=$((fail + 1))
-      printf '  FAIL %-32s нет в %s: ядро соберётся без этой возможности\n' "$sym" "$(basename "$KCONF")"
+      printf '  FAIL %-32s missing from %s: the kernel will be built without this feature\n' "$sym" "$(basename "$KCONF")"
     fi
   done
 fi
 
 echo
-echo "Итог: проверено $checked, провалов $fail, предупреждений $warn"
+echo "Summary: checked $checked, failures $fail, warnings $warn"
 
 if [ "$fail" -gt 0 ]; then
-  echo "ОШИБКА: defconfig выбросил или изменил выбранные пакеты — образ соберётся без них." >&2
+  echo "ERROR: defconfig dropped or changed selected packages — the image will be built without them." >&2
   exit 1
 fi
 
-echo "PASS: все CONFIG_PACKAGE_* применены как запрошено."
+printf '%s: all CONFIG_PACKAGE_* symbols applied as requested.\n' PASS

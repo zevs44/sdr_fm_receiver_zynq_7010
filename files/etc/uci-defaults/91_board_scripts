@@ -14,16 +14,16 @@ chmod 0777 /myscripts 2>/dev/null || true
 [ -f /myscripts/run-diag-board.sh ] || exit 0
 chmod 0777 /myscripts/run-diag-board.sh 2>/dev/null || true
 
-if uci -q show luci 2>/dev/null | grep -qF "DIAG: проверка платы"; then
+if uci -q show luci 2>/dev/null | grep -qF "DIAG: board check"; then
 	exit 0
 fi
 
 uci -q add luci command >/dev/null 2>&1 || exit 0
-uci -q set luci.@command[-1].name='DIAG: проверка платы'
+uci -q set luci.@command[-1].name='DIAG: board check'
 uci -q set luci.@command[-1].command='/myscripts/run-diag-board.sh --log /tmp/run-diag-board.log'
 
 uci -q add luci command >/dev/null 2>&1 || exit 0
-uci -q set luci.@command[-1].name='DIAG: проверка платы со звуком'
+uci -q set luci.@command[-1].name='DIAG: board check with sound'
 uci -q set luci.@command[-1].command='/myscripts/run-diag-board.sh --sound --log /tmp/run-diag-board.log'
 
 uci -q commit luci

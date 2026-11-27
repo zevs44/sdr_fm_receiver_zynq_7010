@@ -17,7 +17,7 @@ README. Загрузчик и битстрим — из релиза автор�
 
 | Раздел | Содержимое |
 |---|---|
-| FAT, 16 Мб | `boot.bin`, `u-boot.img`, `uEnv.txt`, `system.bit.gz`, `fit.itb` |
+| FAT, 16 Мб, метка `ANTMINER_S9` | `boot.bin`, `u-boot.img`, `uEnv.txt`, `system.bit.gz`, `fit.itb` |
 | squashfs + overlay | корневая система OpenWrt с пакетами автора |
 
 ## Запись на карту
@@ -248,7 +248,8 @@ bash scripts/check_config.sh ./openwrt
 bash scripts/verify_image.sh ./openwrt/bin/targets/zynq/generic
 ```
 
-`verify_image.sh` требует `sfdisk`, `mtools`, `dosfstools`, `squashfs-tools`.
+`verify_image.sh` требует `sfdisk`, `mtools`, `dosfstools`, `squashfs-tools`;
+метку тома проверяет `blkid` (пакет `util-linux`).
 Отсутствие битстрима считается провалом: такой образ грузится, но PL остаётся
 пустым. Осознанно собрать образ без него: `ALLOW_MISSING_BITSTREAM=1`.
 
