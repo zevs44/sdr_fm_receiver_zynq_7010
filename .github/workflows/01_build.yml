@@ -84,17 +84,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: 1.1 Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: shellcheck
+      - name: 1.2 shellcheck
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends shellcheck
           shellcheck --version
           shellcheck -S warning scripts/*.sh
 
-      - name: actionlint
+      - name: 1.3 actionlint
         run: |
           url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
           curl -fsSL -o /tmp/actionlint.tgz "$url"
@@ -113,10 +113,10 @@ jobs:
     timeout-minutes: 330
 
     steps:
-      - name: Checkout
+      - name: 2.1 Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Resolve OpenWrt tag
+      - name: 2.2 Resolve OpenWrt tag
         id: tag
         run: |
           tag="${{ inputs.openwrt_tag }}"
@@ -130,7 +130,7 @@ jobs:
           echo "value=$tag" >> "$GITHUB_OUTPUT"
           echo "OpenWrt: $tag"
 
-      - name: Resolve build parallelism
+      - name: 2.3 Resolve build parallelism
         id: jobs
         run: |
           jobs="${{ inputs.jobs }}"
@@ -144,7 +144,7 @@ jobs:
           echo "value=$jobs" >> "$GITHUB_OUTPUT"
           echo "параллельность make: $jobs (nproc $(nproc))"
 
-      - name: Show build constants
+      - name: 2.4 Show build constants
         run: |
           echo "репозиторий : $OPENWRT_REPO"
           echo "каталог     : $OPENWRT_DIR"
@@ -152,14 +152,14 @@ jobs:
           echo "тег         : ${{ steps.tag.outputs.value }}"
           echo "jobs        : ${{ steps.jobs.outputs.value }}"
 
-      - name: Free disk space
+      - name: 2.5 Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
                       /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           sudo apt-get clean
           df -h / | tail -1
 
-      - name: Install build dependencies
+      - name: 2.6 Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -170,7 +170,7 @@ jobs:
 
       # Ловит битый коммит, порчу переводов строк и подмену двоичных файлов
       # до 90-минутной сборки.
-      - name: Verify input artifacts
+      - name: 2.7 Verify input artifacts
         run: |
           sha256sum -c scripts/expected_artifacts.sha256
           gzip -t bitstream/system.bit.gz
@@ -182,16 +182,16 @@ jobs:
           fi
           echo "входные артефакты в порядке"
 
-      - name: Clone OpenWrt
+      - name: 2.8 Clone OpenWrt
         run: |
           git clone --depth 1 -b "${{ steps.tag.outputs.value }}" \
             "$OPENWRT_REPO" "$OPENWRT_DIR"
 
-      - name: Apply patches and configure
+      - name: 2.9 Apply patches and configure
         run: bash scripts/apply.sh "./$OPENWRT_DIR"
 
       # Патчи могли лечь частично: сверяем, что затронуты ожидаемые файлы.
-      - name: Audit patch layer
+      - name: 2.10 Audit patch layer
         run: |
           cd "$OPENWRT_DIR"
           git diff --stat
@@ -250,10 +250,10 @@ jobs:
 
       # `make defconfig` молча выбрасывает неразрешившиеся символы: без этой
       # проверки образ собирается без нужных пакетов и CI остаётся зелёным.
-      - name: Verify config
+      - name: 2.11 Verify config
         run: bash scripts/check_config.sh "./$OPENWRT_DIR" configs/zynq_antminer_s9.config
 
-      - name: Restore ccache
+      - name: 2.12 Restore ccache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           # тот же каталог, что и CCACHE_DIR ниже: раньше кэш сохранялся из
@@ -263,7 +263,7 @@ jobs:
           restore-keys: |
             ccache-${{ steps.tag.outputs.value }}-
 
-      - name: Download sources
+      - name: 2.13 Download sources
         timeout-minutes: 90
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -283,7 +283,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build
+      - name: 2.14 Build
         timeout-minutes: 300
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -383,11 +383,11 @@ jobs:
           exit $rc
 
       # Проверка не только «файл существует», но и «образ работоспособен».
-      - name: Verify image
+      - name: 2.15 Verify image
         if: success()
         run: bash scripts/verify_image.sh "./$OPENWRT_DIR/bin/targets/$TARGET/$SUBTARGET"
 
-      - name: Collect build info
+      - name: 2.16 Collect build info
         if: always()
         env:
           # без этого `ccache -s` читает ~/.ccache и всегда показывает ноль
@@ -421,7 +421,7 @@ jobs:
       # а мы отлаживаем именно падения: без этого шага каждая повторная сборка
       # начинается с нуля. Ключ уникален для прогона, restore-keys в шаге
       # «Restore ccache» находит самый свежий по префиксу.
-      - name: Save ccache
+      - name: 2.17 Save ccache
         if: always()
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -429,7 +429,7 @@ jobs:
           path: ${{ github.workspace }}/.ccache
           key: ccache-${{ steps.tag.outputs.value }}-${{ github.run_id }}
 
-      - name: Show failing logs
+      - name: 2.18 Show failing logs
         if: failure()
         run: |
           echo "===== хвост build.log ====="
@@ -446,7 +446,7 @@ jobs:
             find logs -name '*.txt' -size +0 2>/dev/null | head -20
           fi
 
-      - name: Upload image
+      - name: 2.19 Upload image
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.ARTIFACT_PREFIX }}-${{ steps.tag.outputs.value }}
@@ -462,7 +462,7 @@ jobs:
 
       # Логи нужны и при успехе: без базовой линии не с чем сравнивать,
       # а build.log — единственное место, куда ушёл весь вывод make world.
-      - name: Upload build logs
+      - name: 2.20 Upload build logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -489,16 +489,16 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - name: Checkout
+      - name: 3.1 Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install QEMU and image tools
+      - name: 3.2 Install QEMU and image tools
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             qemu-system-arm u-boot-tools mtools fdisk
 
-      - name: Download image artifact
+      - name: 3.3 Download image artifact
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -507,7 +507,7 @@ jobs:
             --pattern 'sdcard-*' --dir artifacts
           find artifacts -type f -name '*.img.gz' -exec ls -l {} \;
 
-      - name: Boot in QEMU
+      - name: 3.4 Boot in QEMU
         env:
           QEMU_LOG: serial.log
         run: |
@@ -518,7 +518,7 @@ jobs:
           fi
           bash scripts/qemu_smoke.sh "$img" 300
 
-      - name: Upload serial log
+      - name: 3.5 Upload serial log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -553,13 +553,13 @@ jobs:
       ARTIFACT_PATTERN: sdcard-*
 
     steps:
-      - name: Checkout
+      - name: 4.1 Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # история нужна для списка изменений между тегами
           fetch-depth: 0
 
-      - name: Resolve tag and commit
+      - name: 4.2 Resolve tag and commit
         id: tag
         env:
           TAG_INPUT: ${{ inputs.tag }}
@@ -592,7 +592,7 @@ jobs:
       # попадёт образ, который не прошёл проверки образа и QEMU. Прогоны берём
       # только с артефактом sdcard-*: прогон по тегу (этот же workflow) образа
       # не собирал, а прошлые релизные прогоны — только публиковали его.
-      - name: Find a green build run
+      - name: 4.3 Find a green build run
         id: run
         env:
           GH_TOKEN: ${{ github.token }}
@@ -635,7 +635,7 @@ jobs:
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
           echo "используем прогон $run_id ($head)"
 
-      - name: Download image
+      - name: 4.4 Download image
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ steps.run.outputs.run_id }}
@@ -653,7 +653,7 @@ jobs:
           sha256sum "$img" | tee artifacts/SHA256SUMS
           ls -l "$img"
 
-      - name: Build release notes
+      - name: 4.5 Build release notes
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           RUN_ID: ${{ steps.run.outputs.run_id }}
@@ -698,7 +698,7 @@ jobs:
           } > release-notes.md
           cat release-notes.md
 
-      - name: Publish release
+      - name: 4.6 Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}

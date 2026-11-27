@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Validate inputs
+      - name: 1.1 Validate inputs
         run: |
           case "$OLDER_THAN_DAYS" in
             ''|*[!0-9]*)
@@ -78,7 +78,7 @@ jobs:
           echo "старше дней : $OLDER_THAN_DAYS"
           echo "dry run     : $DRY_RUN"
 
-      - name: Delete old successful runs
+      - name: 1.2 Delete old successful runs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
