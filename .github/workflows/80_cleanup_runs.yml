@@ -1,19 +1,18 @@
 name: 80 cleanup runs
 
-# Чистит старые успешные прогоны workflow, чтобы история Actions не росла
-# бесконечно. По умолчанию трогает только «90 watch upstream»: он запускается
-# раз в 6 часов (около 1460 прогонов в год), и почти все прогоны — успешные
-# и пустые, то есть мусор.
+# Чистит историю прогонов Actions, чтобы она не росла бесконечно.
 #
-# Правила, которые workflow соблюдает всегда:
-#   - удаляются только прогоны с conclusion = success;
-#   - только завершённые и старше N дней (по умолчанию 10);
-#   - неуспешные прогоны не удаляются никогда — это история отладки;
+# Правила, которые workflow соблюдает всегда (W-37, W-38):
+#   - удаляются только завершённые прогоны (status = completed);
+#   - срок хранения зависит от итога: успешные — `success_days` (по умолчанию 10),
+#     упавшие и отменённые — `failed_days` (по умолчанию 15);
+#   - по одному последнему прогону каждого итога на каждый workflow сохраняется
+#     при любом сроке: это точка отсчёта, а не мусор;
 #   - текущий прогон не удаляется никогда (исключён по id);
-#   - свои прошлые прогоны чистятся наравне с остальными — но только когда
-#     выбран режим all; по умолчанию цель — 81_watch_upstream.yml.
+#   - сроки задаются входами и проверяются на целое число.
 #
-# Удаление прогона удаляет и его артефакты.
+# Удаление прогона удаляет и его артефакты. Артефакты промежуточных сборок
+# удаляются отдельно по W-39: см. logs/README.md в проекте.
 
 on:
   schedule:
@@ -23,11 +22,15 @@ on:
       workflow:
         description: "Файл workflow (all = все workflow репозитория)"
         required: false
-        default: "81_watch_upstream.yml"
-      older_than_days:
+        default: "all"
+      success_days:
         description: "Удалять успешные прогоны старше N дней"
         required: false
         default: "10"
+      failed_days:
+        description: "Удалять упавшие и отменённые прогоны старше N дней"
+        required: false
+        default: "15"
       dry_run:
         description: "true = только показать, ничего не удалять"
         required: false
@@ -43,8 +46,9 @@ concurrency:
 
 env:
   # для schedule-запуска inputs пусты — берём значения по умолчанию
-  TARGET_WORKFLOW: ${{ inputs.workflow || '81_watch_upstream.yml' }}
-  OLDER_THAN_DAYS: ${{ inputs.older_than_days || '10' }}
+  TARGET_WORKFLOW: ${{ inputs.workflow || 'all' }}
+  SUCCESS_DAYS: ${{ inputs.success_days || '10' }}
+  FAILED_DAYS: ${{ inputs.failed_days || '15' }}
   DRY_RUN: ${{ inputs.dry_run || 'false' }}
   # сколько последних прогонов просматривать за один запуск; если история
   # длиннее, хвост дочистится следующими запусками
@@ -57,16 +61,20 @@ jobs:
     steps:
       - name: 1.1 Validate inputs
         run: |
-          case "$OLDER_THAN_DAYS" in
-            ''|*[!0-9]*)
-              echo "ОШИБКА: older_than_days должен быть целым числом" >&2
+          for pair in "success_days:$SUCCESS_DAYS" "failed_days:$FAILED_DAYS"; do
+            name="${pair%%:*}"
+            value="${pair#*:}"
+            case "$value" in
+              ''|*[!0-9]*)
+                echo "ОШИБКА: $name должен быть целым числом" >&2
+                exit 1
+                ;;
+            esac
+            if [ "$value" -lt 1 ]; then
+              echo "ОШИБКА: $name должен быть не меньше 1" >&2
               exit 1
-              ;;
-          esac
-          if [ "$OLDER_THAN_DAYS" -lt 1 ]; then
-            echo "ОШИБКА: older_than_days должен быть не меньше 1" >&2
-            exit 1
-          fi
+            fi
+          done
           case "$DRY_RUN" in
             true|false) ;;
             *)
@@ -74,18 +82,21 @@ jobs:
               exit 1
               ;;
           esac
-          echo "workflow    : $TARGET_WORKFLOW"
-          echo "старше дней : $OLDER_THAN_DAYS"
-          echo "dry run     : $DRY_RUN"
+          echo "workflow      : $TARGET_WORKFLOW"
+          echo "успешные      : старше $SUCCESS_DAYS дней"
+          echo "упавшие       : старше $FAILED_DAYS дней"
+          echo "dry run       : $DRY_RUN"
 
-      - name: 1.2 Delete old successful runs
+      - name: 1.2 Delete old completed runs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          cutoff="$(date -u -d "-${OLDER_THAN_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
-          echo "cutoff: прогоны, созданные раньше $cutoff"
+          success_cutoff="$(date -u -d "-${SUCCESS_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
+          failed_cutoff="$(date -u -d "-${FAILED_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
+          echo "cutoff успешных: $success_cutoff"
+          echo "cutoff упавших : $failed_cutoff"
 
           wf_args=()
           if [ "$TARGET_WORKFLOW" != "all" ]; then
@@ -95,34 +106,44 @@ jobs:
           # --repo обязателен: у репозитория два remote (origin — наш форк,
           # upstream — автор), и gh без него может уйти не в тот репозиторий
           runs="$(gh run list --repo "$GITHUB_REPOSITORY" "${wf_args[@]}" \
-                    --status success --limit "$LIST_LIMIT" \
-                    --json databaseId,conclusion,createdAt,displayTitle)"
+                    --status completed --limit "$LIST_LIMIT" \
+                    --json databaseId,conclusion,status,createdAt,workflowName,displayTitle)"
           total="$(jq 'length' <<<"$runs")"
-          echo "успешных прогонов просмотрено: $total (лимит $LIST_LIMIT)"
+          echo "завершённых прогонов просмотрено: $total (лимит $LIST_LIMIT)"
 
-          # conclusion проверяем ещё раз: --status success уже отфильтровал,
-          # но лишняя проверка дешевле, чем удалённый не тот прогон.
-          # Свои прошлые прогоны чистим наравне с остальными (в режиме all) —
-          # иначе история этого workflow росла бы вечно. Текущий прогон
-          # исключён по id: удалять выполняющийся run нельзя.
-          old="$(jq -r --arg cutoff "$cutoff" --arg self "$GITHUB_RUN_ID" '
-                    [.[] | select(.conclusion == "success"
-                                  and .createdAt < $cutoff
-                                  and (.databaseId | tostring) != $self)]
-                    | sort_by(.createdAt)
-                    | .[] | [.databaseId, .createdAt, .displayTitle] | @tsv' <<<"$runs")"
+          # $keep — по одному последнему прогону каждого итога на workflow.
+          # Такие прогоны не удаляются при любом сроке (W-37).
+          old="$(jq -r \
+                    --arg self "$GITHUB_RUN_ID" \
+                    --arg scut "$success_cutoff" \
+                    --arg fcut "$failed_cutoff" '
+            [ .[] | select(.status == "completed") ] as $all
+            | ( $all
+                | group_by(.workflowName)
+                | map( { key: .[0].workflowName,
+                        value: ( group_by(.conclusion)
+                                 | map(max_by(.createdAt) | .databaseId) ) } )
+                | from_entries ) as $keep
+            | $all[]
+            | . as $r
+            | select( ($keep[$r.workflowName] | index($r.databaseId)) == null )
+            | select( ($r.databaseId | tostring) != $self )
+            | select( ($r.conclusion == "success" and $r.createdAt < $scut)
+                      or ($r.conclusion != "success" and $r.createdAt < $fcut) )
+            | [$r.databaseId, $r.createdAt, $r.workflowName, $r.conclusion, $r.displayTitle]
+            | @tsv' <<<"$runs")"
           count="$(printf '%s' "$old" | grep -c . || true)"
           echo "под удаление: $count"
 
           deleted=0
-          while IFS=$'\t' read -r id created title; do
+          while IFS=$'\t' read -r id created wf conclusion title; do
             [ -n "${id:-}" ] || continue
             if [ "$DRY_RUN" = "true" ]; then
-              echo "DRY-RUN  $id  $created  $title"
+              echo "DRY-RUN  $id  $created  [$wf] $conclusion  $title"
               continue
             fi
             gh run delete "$id" --repo "$GITHUB_REPOSITORY"
-            echo "удалён   $id  $created  $title"
+            echo "удалён   $id  $created  [$wf] $conclusion  $title"
             deleted=$((deleted + 1))
           done <<<"$old"
 
@@ -132,8 +153,9 @@ jobs:
             echo "| Параметр | Значение |"
             echo "|---|---|"
             echo "| workflow | \`$TARGET_WORKFLOW\` |"
-            echo "| старше | $OLDER_THAN_DAYS дней (cutoff $cutoff) |"
-            echo "| успешных просмотрено | $total |"
+            echo "| успешные старше | $SUCCESS_DAYS дней (cutoff $success_cutoff) |"
+            echo "| упавшие старше | $FAILED_DAYS дней (cutoff $failed_cutoff) |"
+            echo "| завершённых просмотрено | $total |"
             echo "| под удаление | $count |"
             echo "| удалено | $deleted |"
             echo "| dry run | $DRY_RUN |"
