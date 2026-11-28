@@ -73,6 +73,10 @@ env:
   DEFAULT_JOBS: "4"
   ACTIONLINT_VERSION: "1.7.12"
   ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+  # Версия shellcheck закреплена (W-33): пакетный менеджер образа её не задаёт.
+  # Смена версии — отдельный коммит с прогоном конвейера (W-36).
+  SHELLCHECK_VERSION: "0.10.0"
+  SHELLCHECK_SHA256: "6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87"
 # ─────────────────────────────────────────────────────────────────────
 
 jobs:
@@ -89,12 +93,26 @@ jobs:
 
       - name: 1.2 shellcheck
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends shellcheck
+          set -euo pipefail
+          url="https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL -o /tmp/shellcheck.tar.xz "$url"
+          echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp
+          sudo install -m 0755 "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
           shellcheck --version
-          shellcheck -S warning scripts/*.sh
+          # -P SCRIPTDIR: относительные source разрешаются от каталога скрипта (W-34).
+          # Замечания уровня warning останавливают сборку (W-35).
+          shellcheck -P SCRIPTDIR -S warning scripts/*.sh 2>&1 | tee "${RUNNER_TEMP}/shellcheck.txt"
 
-      - name: 1.3 actionlint
+      - name: 1.3 Upload shellcheck report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: shellcheck-report
+          path: ${{ runner.temp }}/shellcheck.txt
+          if-no-files-found: warn
+
+      - name: 1.4 actionlint
         run: |
           url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
           curl -fsSL -o /tmp/actionlint.tgz "$url"
