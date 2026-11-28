@@ -230,6 +230,19 @@ if [ -n "$fat_off" ]; then
             bad "DTB: LED $led is missing (no /sys/class/leds entry)"
           fi
         done
+        # Кнопки, зуммер и XADC: без узлов нет ни событий, ни температуры.
+        for label in reset ip_get "s9:buzzer"; do
+          if grep -q "label = \"$label\";" "$TMP/board.dts"; then
+            ok "DTB: label $label"
+          else
+            bad "DTB: label $label is missing (button or buzzer will not work)"
+          fi
+        done
+        if grep -q "xadc" "$TMP/board.dts"; then
+          ok "DTB: XADC node"
+        else
+          bad "DTB: XADC node is missing (no die temperature)"
+        fi
       else
         bad "DTB: cannot extract or parse the DTB from fit.itb"
       fi
@@ -278,6 +291,13 @@ if [ -n "$rootfs_off" ]; then
       else
         bad "rootfs: leds-gpio.ko is missing (kmod-leds-gpio is not in the image)"
       fi
+      # Раздатчик событий кнопок: имя из DTB приходит в /etc/rc.button.
+      if grep -qE "/lib/modules/[^/]+/gpio-button-hotplug\.ko$" "$TMP/rootfs.list"; then
+        ok "rootfs: module gpio-button-hotplug.ko"
+      else
+        bad "rootfs: gpio-button-hotplug.ko is missing (buttons send no events)"
+      fi
+      check_in_rootfs "etc/rc.button/ip_get"
       if grep -qE "/www/luci-static/resources/view/fmradio/" "$TMP/rootfs.list"; then
         ok "rootfs: LuCI fmradio view"
       else

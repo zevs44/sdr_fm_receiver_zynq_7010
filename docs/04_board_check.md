@@ -36,6 +36,9 @@ only its own `run-diag-board.sh` and never clears the directory.
 | Device tree | six NAND partition labels | `boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs` | yes |
 | Device tree | no `earlyprintk` in `/proc/cmdline` | the spare parameter is gone | yes |
 | LEDs | `/sys/class/leds` has `s9:red:usr`, `s9:green:usr`, `s9:red:inner` | `kmod-leds-gpio` is loaded and the DTS nodes work | `SKIP` |
+| Buzzer | `/sys/class/leds/s9:buzzer` exists | the piezo driver pin is declared and driven | `SKIP` |
+| XADC | iio device named `xadc` | the internal ADC node is enabled, die temperature is readable | `SKIP` |
+| Buttons | `/proc/bus/input/devices` lists the gpio-keys device | `gpio-button-hotplug` receives `reset` and `ip_get` events | printed, no verdict |
 | Radio | `/dev/radio0` | the driver found the FPGA device | `SKIP` |
 | Sound | the `audio` card in `/proc/asound/cards` | the ALSA path and `simple-audio-card` are up | `SKIP` |
 | Sound, `--sound` | playback of a tone on J2 (PDM) | the stream opens, audio reaches the delta-sigma DAC | `SKIP` |

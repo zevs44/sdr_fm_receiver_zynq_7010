@@ -36,6 +36,9 @@ NAND, сеть и службы. Каждая проверка печатает �
 | Дерево устройства | шесть меток разделов NAND в узле разметки | `boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs` | да |
 | Дерево устройства | в `/proc/cmdline` нет `earlyprintk` | лишний параметр убран | да |
 | Индикаторы | в `/sys/class/leds` есть `s9:red:usr`, `s9:green:usr`, `s9:red:inner` | `kmod-leds-gpio` загружен, узлы DTS работают | `SKIP` |
+| Зуммер | `/sys/class/leds/s9:buzzer` существует | пин зуммера объявлен и управляется | `SKIP` |
+| XADC | iio-устройство с именем `xadc` | узел внутреннего АЦП включён, температура кристалла читается | `SKIP` |
+| Кнопки | в `/proc/bus/input/devices` есть устройство gpio-keys | `gpio-button-hotplug` получает события `reset` и `ip_get` | печатается, без вердикта |
 | Радио | `/dev/radio0` | драйвер нашёл устройство в FPGA | `SKIP` |
 | Звук | карта `audio` в `/proc/asound/cards` | тракт ALSA и `simple-audio-card` поднят | `SKIP` |
 | Звук, `--sound` | воспроизведение тона на J2 (PDM) | поток открывается, звук идёт на ΔΣ-ЦАП | `SKIP` |

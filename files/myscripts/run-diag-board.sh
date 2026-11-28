@@ -219,6 +219,26 @@ else
 	fi
 fi
 
+# Зуммер и температура кристалла: узлы в DTB платы, в дереве QEMU их нет.
+if [ "$PROFILE" = "qemu" ]; then
+	skip "buzzer: the QEMU device tree has no buzzer"
+	skip "XADC: the QEMU device tree has no xadc node"
+else
+	if [ -e /sys/class/leds/s9:buzzer ]; then
+		pass "buzzer: /sys/class/leds/s9:buzzer"
+	else
+		fail "buzzer: s9:buzzer is missing (DTB node or leds-gpio driver)"
+	fi
+	if [ -r /sys/bus/iio/devices/iio:device0/name ] &&
+	   [ "$(cat /sys/bus/iio/devices/iio:device0/name 2>/dev/null)" = "xadc" ]; then
+		pass "XADC: iio device present"
+	else
+		fail "XADC: iio device is missing (adc node is not enabled)"
+	fi
+fi
+# Кнопки: события раздаёт gpio-button-hotplug; список устройств — для сверки.
+show "input devices" cat /proc/bus/input/devices
+
 # ── 4. Радиотракт ────────────────────────────────────────────────────────
 sec "4. radio path"
 if [ "$PROFILE" = "qemu" ]; then
