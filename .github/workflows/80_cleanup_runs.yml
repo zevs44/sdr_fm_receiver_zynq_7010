@@ -20,19 +20,19 @@ on:
   workflow_dispatch:
     inputs:
       workflow:
-        description: "Файл workflow (all = все workflow репозитория)"
+        description: "Workflow file (all = every workflow in the repository)"
         required: false
         default: "all"
       success_days:
-        description: "Удалять успешные прогоны старше N дней"
+        description: "Delete successful runs older than N days"
         required: false
         default: "10"
       failed_days:
-        description: "Удалять упавшие и отменённые прогоны старше N дней"
+        description: "Delete failed and cancelled runs older than N days"
         required: false
         default: "15"
       dry_run:
-        description: "true = только показать, ничего не удалять"
+        description: "true = only show, delete nothing"
         required: false
         default: "false"
 

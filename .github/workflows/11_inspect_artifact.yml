@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "ID прогона с артефактом sdcard-*"
+        description: "Run ID with an sdcard-* artifact"
         required: true
 
 permissions:

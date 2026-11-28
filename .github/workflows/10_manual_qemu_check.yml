@@ -13,10 +13,10 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "ID прогона с артефактом sdcard-* (02 build завершён успешно)"
+        description: "Run ID with an sdcard-* artifact (02 build finished successfully)"
         required: true
       timeout:
-        description: "Таймаут загрузки в QEMU, секунд"
+        description: "QEMU boot timeout, seconds"
         required: false
         default: "300"
 

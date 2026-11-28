@@ -10,28 +10,28 @@ on:
     inputs:
       # — шаги 01–03: сборка —
       openwrt_tag:
-        description: "Тег OpenWrt (пусто = значение из .openwrt-version)"
+        description: "OpenWrt tag (empty = value from .openwrt-version)"
         required: false
         default: ""
       package:
-        description: "Собрать только пакет (например package/boot/uboot-zynq); пусто = весь образ"
+        description: "Build a single package (for example package/boot/uboot-zynq); empty = the whole image"
         required: false
         default: ""
       jobs:
-        description: "Параллельность make (пусто = min(nproc,4))"
+        description: "make parallelism (empty = min(nproc,4))"
         required: false
         default: ""
       # — шаг 04: релиз —
       tag:
-        description: "Шаг 04: тег релиза (например v1.1.0); пусто = тег из push"
+        description: "Step 04: release tag (for example v1.1.0); empty = the tag from the push"
         required: false
         default: ""
       release_run_id:
-        description: "Шаг 04: ID зелёного прогона (пусто = найти по коммиту тега)"
+        description: "Step 04: ID of a successful run (empty = find one by the tag commit)"
         required: false
         default: ""
       overwrite:
-        description: "Шаг 04: обновить существующий релиз (перезалить файл и описание)"
+        description: "Step 04: replace an existing release (re-upload the file and the description)"
         type: boolean
         default: false
   push:
@@ -686,33 +686,33 @@ jobs:
           {
             echo "## OPENWRT $openwrt"
             echo
-            echo "Образ для Antminer S9 (Zynq-7010, XC7Z010), собран на OpenWrt **$openwrt**."
-            echo "Номер релиза — версия образа этого проекта; версия OpenWrt — в заголовке."
+            echo "Image for the Antminer S9 (Zynq-7010, XC7Z010), built on OpenWrt **$openwrt**."
+            echo "The release number is the image version of this project; the OpenWrt version is in the heading."
             echo
-            echo "| Параметр | Значение |"
+            echo "| Parameter | Value |"
             echo "|---|---|"
             echo "| OpenWrt | **$openwrt** |"
-            echo "| Файл | \`$(basename "$IMG")\` |"
-            echo "| Размер | $size байт |"
+            echo "| File | \`$(basename "$IMG")\` |"
+            echo "| Size | $size bytes |"
             echo "| SHA-256 | \`$sha\` |"
-            echo "| Сборка | [прогон $RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID) |"
-            echo "| Проверено | статические проверки образа + загрузка в QEMU |"
+            echo "| Build | [run $RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID) |"
+            echo "| Verified | static image checks + a QEMU boot |"
             echo
             if [ -n "$prev" ]; then
-              echo "## Изменения с $prev"
+              echo "## Changes since $prev"
               echo
               git log --oneline --no-merges "$prev..$TAG" | sed 's/^/- /'
             else
-              echo "## Коммиты"
+              echo "## Commits"
               echo
               git log --oneline --no-merges "$TAG" | head -50 | sed 's/^/- /'
             fi
             echo
-            echo "## Установка"
+            echo "## Installation"
             echo
-            echo "Записать образ на microSD (Rufus, Win32 Disk Imager или \`dd\`),"
-            echo "вставить в плату, перемычки JP1–JP4 = \`0 1 0 1\` (TF Card: JP2 = 1, JP4 = 1)."
-            echo "Значение \`0 0 0 0\` — это Cascade JTAG, с ним плата с карты не загрузится. Подробности — \`build.md\`."
+            echo "Write the image to a microSD card (Rufus, Win32 Disk Imager or \`dd\`),"
+            echo "insert it into the board, jumpers JP1-JP4 = \`0 1 0 1\` (TF Card: JP2 = 1, JP4 = 1)."
+            echo "The value \`0 0 0 0\` is Cascade JTAG: the board will not boot from the card with it. See \`build.md\` for details."
           } > release-notes.md
           cat release-notes.md
 
