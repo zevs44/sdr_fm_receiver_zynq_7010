@@ -1,0 +1,14 @@
+diff --git a/target/linux/zynq/config-6.12 b/target/linux/zynq/config-6.12
+--- a/target/linux/zynq/config-6.12
++++ b/target/linux/zynq/config-6.12
+@@ -290,6 +290,10 @@
+ CONFIG_LEDS_TRIGGER_CAMERA=y
+ CONFIG_LEDS_TRIGGER_CPU=y
+ CONFIG_LEDS_TRIGGER_ONESHOT=y
+ CONFIG_LEDS_TRIGGER_TRANSIENT=y
++# Индикаторы нашей платы: постоянный уровень, мигание и «сердцебиение».
++CONFIG_LEDS_TRIGGER_DEFAULT_ON=y
++CONFIG_LEDS_TRIGGER_TIMER=y
++CONFIG_LEDS_TRIGGER_HEARTBEAT=y
+ CONFIG_LIBFDT=y
+ CONFIG_LOCK_DEBUGGING_SUPPORT=y
