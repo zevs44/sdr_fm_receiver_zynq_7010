@@ -38,17 +38,17 @@ jobs:
           tag="$(gh api "repos/$OPENWRT_REPO/tags" --paginate --jq '.[].name' \
                  | grep -E "$STABLE_TAG_REGEX" | sort -V | tail -1)"
           if [ -z "$tag" ]; then
-            echo "не удалось определить тег" >&2
+            echo "could not determine the tag" >&2
             exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "последний стабильный: $tag"
+          echo "latest stable: $tag"
 
       - name: 1.3 Compare with pinned version
         id: cmp
         run: |
           current="$(tr -d '[:space:]' < "$VERSION_FILE" 2>/dev/null || true)"
-          echo "текущий: ${current:-нет}"
+          echo "current: ${current:-none}"
           if [ "${{ steps.latest.outputs.tag }}" = "$current" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -73,16 +73,16 @@ jobs:
             if git -C "$tmp/openwrt" apply --check -p1 "$GITHUB_WORKSPACE/$p" 2>/dev/null; then
               echo "ok   $p"
             else
-              echo "ОШИБКА: патч не ложится на $TAG: $p" >&2
+              echo "ERROR: the patch does not apply to $TAG: $p" >&2
               failed=1
             fi
           done
           if [ "$failed" -ne 0 ]; then
-            echo "Версия $TAG НЕ закреплена. Пересоберите патчи на новой базе" >&2
-            echo "(см. target_patches/README.md), затем запустите этот workflow вручную." >&2
+            echo "Version $TAG is NOT pinned. Rebase the patches on the new base" >&2
+            echo "(see target_patches/README.md), then run this workflow manually." >&2
             exit 1
           fi
-          echo "патч-слой ложится на $TAG"
+          echo "the patch layer applies to $TAG"
 
       - name: 1.5 Update pinned version
         if: steps.cmp.outputs.changed == 'true'
@@ -91,7 +91,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$VERSION_FILE"
-          git commit -m "chore: обновить OpenWrt до ${{ steps.latest.outputs.tag }}"
+          git commit -m "chore: update OpenWrt to ${{ steps.latest.outputs.tag }}"
           git push
 
       - name: 1.6 Trigger build
@@ -100,4 +100,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run "$BUILD_WORKFLOW" -f openwrt_tag="${{ steps.latest.outputs.tag }}"
-          echo "сборка запущена"
+          echo "build started"

@@ -40,9 +40,9 @@ jobs:
           off="$(sfdisk -d disk.img | sed -n 's/.*start= *\([0-9]*\).*type= *83.*/\1/p' | head -1)"
           echo "rootfs offset sectors: $off"
           unsquashfs -ll -o $((off * 512)) disk.img > listing.txt 2>/dev/null
-          echo "== строки myscripts =="
-          grep -E 'myscripts|run-diag' listing.txt || echo "нет строк"
-          echo "== начало листинга =="
+          echo "== myscripts lines =="
+          grep -E 'myscripts|run-diag' listing.txt || echo "no lines"
+          echo "== listing head =="
           head -5 listing.txt
-          echo "== права init-скриптов для сравнения =="
+          echo "== init script modes for comparison =="
           grep -E 'etc/init.d/(fmradio|audiosrc)$' listing.txt || true

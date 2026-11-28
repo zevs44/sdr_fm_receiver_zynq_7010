@@ -142,7 +142,7 @@ jobs:
             tag="$(tr -d '[:space:]' < .openwrt-version 2>/dev/null || true)"
           fi
           if [ -z "$tag" ]; then
-            echo "ОШИБКА: .openwrt-version пуст и тег не передан вручную" >&2
+            echo "ERROR: .openwrt-version is empty and no tag was passed" >&2
             exit 1
           fi
           echo "value=$tag" >> "$GITHUB_OUTPUT"
@@ -160,14 +160,14 @@ jobs:
             fi
           fi
           echo "value=$jobs" >> "$GITHUB_OUTPUT"
-          echo "параллельность make: $jobs (nproc $(nproc))"
+          echo "make parallelism: $jobs (nproc $(nproc))"
 
       - name: 2.4 Show build constants
         run: |
-          echo "репозиторий : $OPENWRT_REPO"
-          echo "каталог     : $OPENWRT_DIR"
-          echo "цель        : $TARGET/$SUBTARGET"
-          echo "тег         : ${{ steps.tag.outputs.value }}"
+          echo "repository : $OPENWRT_REPO"
+          echo "directory  : $OPENWRT_DIR"
+          echo "target     : $TARGET/$SUBTARGET"
+          echo "tag        : ${{ steps.tag.outputs.value }}"
           echo "jobs        : ${{ steps.jobs.outputs.value }}"
 
       - name: 2.5 Free disk space
@@ -195,10 +195,10 @@ jobs:
           # `|| true`: head закрывает поток раньше gzip, а GitHub включает pipefail
           magic="$(gzip -dc bitstream/system.bit.gz 2>/dev/null | head -c 4 | od -An -tx1 | tr -d ' \n' || true)"
           if [ "$magic" != "00090ff0" ]; then
-            echo "ОШИБКА: магия битстрима $magic, ожидалась 00090ff0" >&2
+            echo "ERROR: bitstream magic $magic, expected 00090ff0" >&2
             exit 1
           fi
-          echo "входные артефакты в порядке"
+          echo "input artifacts verified"
 
       - name: 2.8 Clone OpenWrt
         run: |
@@ -219,11 +219,11 @@ jobs:
           # поэтому проверяем оба случая.
           check_patched() {
             if [ -f "$1" ] && ! git ls-files --error-unmatch -- "$1" >/dev/null 2>&1; then
-              echo "ok  $1 (новый файл из патча)"
+              echo "ok  $1 (new file from a patch)"
             elif [ -f "$1" ] && ! git diff --quiet -- "$1"; then
-              echo "ok  $1 (изменён патчем)"
+              echo "ok  $1 (changed by a patch)"
             else
-              echo "ОШИБКА: патч не изменил $1" >&2
+              echo "ERROR: the patch did not change $1" >&2
               failed=1
             fi
           }
@@ -240,16 +240,16 @@ jobs:
           # Имя конфига ядра зависит от версии: config-6.12, config-6.18 и т. д.
           kconf="$(find target/linux/zynq -maxdepth 1 -name 'config-6.*' 2>/dev/null | sort | tail -1)"
           if [ -z "$kconf" ]; then
-            echo "ОШИБКА: в target/linux/zynq нет config-6.*" >&2
+            echo "ERROR: no config-6.* in target/linux/zynq" >&2
             failed=1
           else
             check_patched "$kconf"
           fi
           check_content() {
             if grep -q "$2" "$1"; then
-              echo "ok  $1 содержит '$2'"
+              echo "ok  $1 contains '$2'"
             else
-              echo "ОШИБКА: в $1 нет '$2'" >&2
+              echo "ERROR: $1 does not contain '$2'" >&2
               failed=1
             fi
           }
@@ -293,11 +293,11 @@ jobs:
               ok=1
               break
             fi
-            echo "===== попытка $attempt не удалась, пауза 20 с =====" >&2
+            echo "===== attempt $attempt failed, waiting 20 s =====" >&2
             sleep 20
           done
           if [ "$ok" -ne 1 ]; then
-            echo "ОШИБКА: не удалось скачать исходники за три попытки" >&2
+            echo "ERROR: sources were not downloaded in three attempts" >&2
             exit 1
           fi
 
@@ -309,7 +309,7 @@ jobs:
           cd "$OPENWRT_DIR"
           JOBS="${{ steps.jobs.outputs.value }}"
           if [ -n "${{ inputs.package }}" ]; then
-            echo "сборка только пакета: ${{ inputs.package }}"
+            echo "single package build: ${{ inputs.package }}"
             # адресная сборка не тянет за собой host-инструменты и тулчейн
             make -j"$JOBS" tools/install
             make -j"$JOBS" toolchain/install
@@ -323,7 +323,7 @@ jobs:
           make -j"$JOBS" -k world > "$GITHUB_WORKSPACE/build.log" 2>&1
           rc=$?
           if [ "$rc" -ne 0 ]; then
-            echo "===== сборка упала, ищу пакет ====="
+            echo "===== build failed, looking for the failing package ====="
             grep -E "ERROR: .* failed to build|make(\[[0-9]+\])?: \*\*\*" "$GITHUB_WORKSPACE/build.log" | tail -40
 
             # Повтор упавшей цели с V=s: verbose.mk в обычном режиме глушит
@@ -332,13 +332,13 @@ jobs:
             # и ошибку видно, даже если она не попала в tail.
             retry_target() {
               local log="$GITHUB_WORKSPACE/retry.log"
-              echo "===== повтор $* с V=s =====" | tee -a "$log"
+              echo "===== retry $* with V=s =====" | tee -a "$log"
               make -j1 "$@" V=s >> "$log" 2>&1
               local rc=$?
-              echo "код возврата повтора: $rc" | tee -a "$log"
-              echo "===== ошибки в повторе ====="
+              echo "retry exit code: $rc" | tee -a "$log"
+              echo "===== errors in the retry ====="
               grep -nE "Error [0-9]+|error:|ERROR:|No rule|No space left|Killed|command not found|Permission denied|missing" "$log" | tail -60
-              echo "===== последние 200 строк повтора ====="
+              echo "===== last 200 lines of the retry ====="
               tail -n 200 "$log"
               return $rc
             }
@@ -346,7 +346,7 @@ jobs:
             mapfile -t failed < <(grep -oE "ERROR: [^ ]+ failed to build" "$GITHUB_WORKSPACE/build.log" \
                                   | awk '{print $2}' | sort -u)
             if [ "${#failed[@]}" -gt 0 ]; then
-              echo "===== сломанных целей: ${#failed[@]} ====="
+              echo "===== failed targets: ${#failed[@]} ====="
               printf '  - %s\n' "${failed[@]}"
               case "${failed[0]}" in
                 target/*)
@@ -365,7 +365,7 @@ jobs:
                     ls -l "$OPENWRT_DIR/staging_dir/host/bin/apk" 2>&1 || true
                     retry_target package/install target/install
                   else
-                    echo "детерминированная ошибка компиляции — установки пропущены"
+                    echo "deterministic compile error, install steps skipped"
                   fi
                   ;;
                 *)
@@ -377,10 +377,10 @@ jobs:
               # в /dev/null и оставляет только «build failed» — реальной ошибки
               # в build.log нет вовсе. Поэтому повторяем именно упавшую цель
               # (из последней строки « make[N] <цель>») с V=s.
-              echo "===== пакет не назван: ошибки в build.log ====="
+              echo "===== package not named: errors from build.log ====="
               grep -nE "Error [0-9]+|error:|ERROR:|No space left|Killed|command not found" \
                 "$GITHUB_WORKSPACE/build.log" | tail -40
-              echo "===== последние 60 строк build.log ====="
+              echo "===== last 60 lines of build.log ====="
               tail -n 60 "$GITHUB_WORKSPACE/build.log"
 
               # «-C» — это не цель, а флаг make; такие строки отбрасываем.
@@ -389,11 +389,11 @@ jobs:
               if [ -n "$failed_target" ]; then
                 retry_target "$failed_target"
               else
-                echo "цель определить не удалось — полный build.log в артефакте"
+                echo "target could not be identified; the full build.log is in the artifact"
               fi
             fi
 
-            echo "===== диск и память ====="
+            echo "===== disk and memory ====="
             df -h / | tail -1
             free -m || true
             dmesg 2>/dev/null | grep -iE "out of memory|killed process" | tail -5 || true
@@ -421,16 +421,16 @@ jobs:
             echo "config_sha256   : $(sha256sum "$OPENWRT_DIR/.config" 2>/dev/null | cut -d' ' -f1)"
             for f in "$OPENWRT_DIR"/bin/targets/"$TARGET"/"$SUBTARGET"/*.img.gz; do
               [ -f "$f" ] || continue
-              echo "image           : $(basename "$f") $(wc -c < "$f") байт"
+              echo "image           : $(basename "$f") $(wc -c < "$f") bytes"
               echo "image_sha256    : $(sha256sum "$f" | cut -d' ' -f1)"
             done
             echo
             echo "--- ccache ---"
-            ccache -s 2>/dev/null || echo "ccache -s недоступен"
+            ccache -s 2>/dev/null || echo "ccache -s is unavailable"
             echo
-            echo "--- диск ---"
+            echo "--- disk ---"
             df -h / | tail -1
-            echo "--- память ---"
+            echo "--- memory ---"
             free -m || true
           } > "$GITHUB_WORKSPACE/build-info.txt"
           cat "$GITHUB_WORKSPACE/build-info.txt"
@@ -450,8 +450,8 @@ jobs:
       - name: 2.18 Show failing logs
         if: failure()
         run: |
-          echo "===== хвост build.log ====="
-          tail -n 80 "$GITHUB_WORKSPACE/build.log" 2>/dev/null || echo "build.log нет"
+          echo "===== tail of build.log ====="
+          tail -n 80 "$GITHUB_WORKSPACE/build.log" 2>/dev/null || echo "build.log is missing"
           cd "$OPENWRT_DIR" || exit 0
           found=0
           for f in $(grep -rlE "Error [0-9]|error:" logs/ 2>/dev/null | head -5); do
@@ -460,7 +460,7 @@ jobs:
             tail -60 "$f"
           done
           if [ "$found" = "0" ]; then
-            echo "логи с ошибками не найдены; список файлов:"
+            echo "no error logs found; file list:"
             find logs -name '*.txt' -size +0 2>/dev/null | head -20
           fi
 
@@ -531,7 +531,7 @@ jobs:
         run: |
           img="$(find artifacts -type f -name '*.img.gz' | head -1)"
           if [ -z "$img" ]; then
-            echo "ОШИБКА: в артефакте нет *.img.gz" >&2
+            echo "ERROR: the artifact has no *.img.gz" >&2
             exit 1
           fi
           bash scripts/qemu_smoke.sh "$img" 300
@@ -587,24 +587,24 @@ jobs:
           tag="$TAG_INPUT"
           if [ -z "$tag" ]; then
             if [ "$REF_TYPE" != "tag" ]; then
-              echo "ОШИБКА: запуск не по тегу и tag не передан" >&2
+              echo "ERROR: not a tag run and no tag was passed" >&2
               exit 1
             fi
             tag="$REF_NAME"
           fi
           case "$tag" in
             v*) ;;
-            *) echo "ОШИБКА: тег должен начинаться с v, получено: $tag" >&2; exit 1 ;;
+            *) echo "ERROR: the tag must start with v, got: $tag" >&2; exit 1 ;;
           esac
           git fetch --tags --force
           if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "ОШИБКА: тег $tag не существует" >&2
+            echo "ERROR: tag $tag does not exist" >&2
             exit 1
           fi
           sha="$(git rev-list -n1 "$tag")"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "релиз $tag → коммит $sha"
+          echo "release $tag -> commit $sha"
 
       # Релиз публикуется только из зелёного прогона шагов 01–03: иначе в релиз
       # попадёт образ, который не прошёл проверки образа и QEMU. Прогоны берём
@@ -636,22 +636,22 @@ jobs:
             done
           fi
           if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
-            echo "ОШИБКА: для коммита $TAG_SHA нет успешного прогона с образом." >&2
-            echo "Сначала соберите образ или передайте release_run_id." >&2
+            echo "ERROR: no successful run with an image for commit $TAG_SHA." >&2
+            echo "Build the image first, or pass release_run_id." >&2
             exit 1
           fi
           conclusion="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json conclusion -q .conclusion)"
           head="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json headSha -q .headSha)"
           if [ "$conclusion" != "success" ]; then
-            echo "ОШИБКА: прогон $run_id не успешен ($conclusion)" >&2
+            echo "ERROR: run $run_id is not successful ($conclusion)" >&2
             exit 1
           fi
           if [ -z "$RUN_INPUT" ] && [ "$head" != "$TAG_SHA" ]; then
-            echo "ОШИБКА: прогон $run_id относится к коммиту $head, а не к тегу $TAG_SHA" >&2
+            echo "ERROR: run $run_id belongs to commit $head, not to tag $TAG_SHA" >&2
             exit 1
           fi
           echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "используем прогон $run_id ($head)"
+          echo "using run $run_id ($head)"
 
       - name: 4.4 Download image
         env:
@@ -663,7 +663,7 @@ jobs:
             --pattern "$ARTIFACT_PATTERN" --dir artifacts
           img="$(find artifacts -type f -name '*.img.gz' | head -1)"
           if [ -z "$img" ]; then
-            echo "ОШИБКА: в артефакте нет *.img.gz" >&2
+            echo "ERROR: the artifact has no *.img.gz" >&2
             find artifacts -type f | head -20 >&2
             exit 1
           fi
@@ -678,7 +678,7 @@ jobs:
         run: |
           # Версия OpenWrt для заголовка — без ведущей «v»: .openwrt-version
           # хранит тег (v25.12.6), а в тексте нужно «25.12.6».
-          openwrt="$(tr -d '[:space:]' < .openwrt-version 2>/dev/null || echo 'неизвестно')"
+          openwrt="$(tr -d '[:space:]' < .openwrt-version 2>/dev/null || echo 'unknown')"
           openwrt="${openwrt#v}"
           size="$(wc -c < "$IMG" | tr -d ' ')"
           sha="$(cut -d' ' -f1 artifacts/SHA256SUMS)"
@@ -729,8 +729,8 @@ jobs:
           esac
           if [ -n "$exists" ]; then
             if [ "$OVERWRITE" != "true" ]; then
-              echo "ОШИБКА: релиз $TAG уже существует." >&2
-              echo "Чтобы обновить файл и описание, запустите с overwrite=true." >&2
+              echo "ERROR: release $TAG already exists." >&2
+              echo "To replace the file and the description, run with overwrite=true." >&2
               exit 1
             fi
             gh release upload "$TAG" "$IMG" --clobber --repo "$GITHUB_REPOSITORY"

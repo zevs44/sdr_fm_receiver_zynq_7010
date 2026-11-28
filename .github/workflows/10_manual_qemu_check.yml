@@ -53,7 +53,7 @@ jobs:
         run: |
           img="$(find artifacts -type f -name '*.img.gz' | head -1)"
           if [ -z "$img" ]; then
-            echo "ОШИБКА: в артефакте нет *.img.gz" >&2
+            echo "ERROR: the artifact has no *.img.gz" >&2
             exit 1
           fi
           bash scripts/qemu_smoke.sh "$img" "${{ inputs.timeout }}"

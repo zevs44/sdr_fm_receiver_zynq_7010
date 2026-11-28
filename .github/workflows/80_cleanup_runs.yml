@@ -66,25 +66,25 @@ jobs:
             value="${pair#*:}"
             case "$value" in
               ''|*[!0-9]*)
-                echo "ОШИБКА: $name должен быть целым числом" >&2
+                echo "ERROR: $name must be an integer" >&2
                 exit 1
                 ;;
             esac
             if [ "$value" -lt 1 ]; then
-              echo "ОШИБКА: $name должен быть не меньше 1" >&2
+              echo "ERROR: $name must be at least 1" >&2
               exit 1
             fi
           done
           case "$DRY_RUN" in
             true|false) ;;
             *)
-              echo "ОШИБКА: dry_run принимает только true или false" >&2
+              echo "ERROR: dry_run accepts only true or false" >&2
               exit 1
               ;;
           esac
           echo "workflow      : $TARGET_WORKFLOW"
-          echo "успешные      : старше $SUCCESS_DAYS дней"
-          echo "упавшие       : старше $FAILED_DAYS дней"
+          echo "successful    : older than $SUCCESS_DAYS days"
+          echo "failed        : older than $FAILED_DAYS days"
           echo "dry run       : $DRY_RUN"
 
       - name: 1.2 Delete old completed runs
@@ -95,8 +95,8 @@ jobs:
 
           success_cutoff="$(date -u -d "-${SUCCESS_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
           failed_cutoff="$(date -u -d "-${FAILED_DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"
-          echo "cutoff успешных: $success_cutoff"
-          echo "cutoff упавших : $failed_cutoff"
+          echo "success cutoff: $success_cutoff"
+          echo "failed cutoff : $failed_cutoff"
 
           wf_args=()
           if [ "$TARGET_WORKFLOW" != "all" ]; then
@@ -109,7 +109,7 @@ jobs:
                     --status completed --limit "$LIST_LIMIT" \
                     --json databaseId,conclusion,status,createdAt,workflowName,displayTitle)"
           total="$(jq 'length' <<<"$runs")"
-          echo "завершённых прогонов просмотрено: $total (лимит $LIST_LIMIT)"
+          echo "completed runs scanned: $total (limit $LIST_LIMIT)"
 
           # $keep — по одному последнему прогону каждого итога на workflow.
           # Такие прогоны не удаляются при любом сроке (W-37).
@@ -133,7 +133,7 @@ jobs:
             | [$r.databaseId, $r.createdAt, $r.workflowName, $r.conclusion, $r.displayTitle]
             | @tsv' <<<"$runs")"
           count="$(printf '%s' "$old" | grep -c . || true)"
-          echo "под удаление: $count"
+          echo "to delete: $count"
 
           deleted=0
           while IFS=$'\t' read -r id created wf conclusion title; do
@@ -143,20 +143,20 @@ jobs:
               continue
             fi
             gh run delete "$id" --repo "$GITHUB_REPOSITORY"
-            echo "удалён   $id  $created  [$wf] $conclusion  $title"
+            echo "deleted  $id  $created  [$wf] $conclusion  $title"
             deleted=$((deleted + 1))
           done <<<"$old"
 
           {
-            echo "### Чистка прогонов Actions"
+            echo "### Actions run cleanup"
             echo
-            echo "| Параметр | Значение |"
+            echo "| Parameter | Value |"
             echo "|---|---|"
             echo "| workflow | \`$TARGET_WORKFLOW\` |"
-            echo "| успешные старше | $SUCCESS_DAYS дней (cutoff $success_cutoff) |"
-            echo "| упавшие старше | $FAILED_DAYS дней (cutoff $failed_cutoff) |"
-            echo "| завершённых просмотрено | $total |"
-            echo "| под удаление | $count |"
-            echo "| удалено | $deleted |"
+            echo "| successful older than | $SUCCESS_DAYS days (cutoff $success_cutoff) |"
+            echo "| failed older than | $FAILED_DAYS days (cutoff $failed_cutoff) |"
+            echo "| completed runs scanned | $total |"
+            echo "| to delete | $count |"
+            echo "| deleted | $deleted |"
             echo "| dry run | $DRY_RUN |"
           } >> "$GITHUB_STEP_SUMMARY"
