@@ -47,6 +47,7 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 | `0200_zynq_sdcard_bitstream_and_uenv.patch` | в `Build/zynq-sdcard` файлы FAT берутся из нашей папки `antminer/`: `boot.bin`, `u-boot.img`, `uEnv.txt`, плюс `system.bit.gz` и `uboot_env.bin`; переменные образа объявлены в `DEVICE_VARS` | штатный образ не грузит битстрим и наш `uEnv.txt` |
 | `0300_zynq_antminer_s9_pl.patch` | узлы PL в DTS: `axi_i2s_adi@43c00000`, `fm-radio@43c60000`, `audio_clock`, `sound` | без узлов нет `/dev/radio0` и ALSA-карты |
 | `0310_zynq_antminer_s9_nand.patch` | таблица разделов NAND в DTS (`boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs`), раскладка автора | без меток `/proc/mtd` пуст и `nand_install` не находит разделы |
+| `0320_zynq_antminer_s9_led.patch` | третий индикатор PS в DTS: `s9:red:inner` на MIO15 (у автора — `Red LED (inside)`); вместе с `kmod-leds-gpio` даёт `/sys/class/leds` и страницу LuCI | бэкпорт объявляет только два индикатора, третий пин на плате есть |
 | `0400_zynq_nand_feature.patch` | добавляет признак `nand` в `FEATURES` цели | открывает штатные `ubi-utils`/`nand-utils`, скрытые за `@NAND_SUPPORT` |
 | `0500_zynq_sound_config.patch` | включает в конфиге ядра `CONFIG_SOUND` и `CONFIG_SND*`: ALSA SoC, ADI AXI-I2S, simple-card, SPDIF | без `CONFIG_SOUND` kconfig отбрасывает все `SND*` без сообщения об ошибке — звука в образе нет |
 | `0600_zynq_nand_config.patch` | включает `CONFIG_MTD_RAW_NAND`, `CONFIG_MTD_NAND_PL35X`, `CONFIG_PL353_SMC`, `CONFIG_MTD_UBI`, `CONFIG_UBIFS_FS` | драйвер NAND скрыт за `MTD_RAW_NAND`; без UBI/UBIFS `nand_install` не смонтирует том |
@@ -55,7 +56,8 @@ PCM5102**. Ни один файл автора не удалён. Всё, что
 
 - `configs/zynq_antminer_s9.config` — цель `zynq/generic`, устройство
   `bitmain_zynq-antminer-s9`, squashfs, пакеты автора и необходимые дополнения
-  (LuCI с темой и TLS, `i2c-tools`, `mympd`, `nand-install`, утилиты mtd/ubi).
+  (LuCI с темой и TLS, `i2c-tools`, `mympd`, `nand-install`, утилиты mtd/ubi,
+  `kmod-leds-gpio` с триггерами `default-on` и `netdev`).
 - `files/uEnv.txt` — загрузочное окружение U-Boot: `fpga loadb` и
   `clk_ignore_unused`.
 - `files/etc/uci-defaults/99_antminer_setup` — первичная настройка при первой

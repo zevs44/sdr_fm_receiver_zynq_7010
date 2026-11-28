@@ -222,6 +222,14 @@ if [ -n "$fat_off" ]; then
             bad "DTB: NAND partition $label is missing (nand_install will not find the label)"
           fi
         done
+        # Индикаторы PS: узлы есть, но без kmod-leds-gpio они не работают.
+        for led in "s9:red:usr" "s9:green:usr" "s9:red:inner"; do
+          if grep -q "label = \"$led\";" "$TMP/board.dts"; then
+            ok "DTB: LED $led"
+          else
+            bad "DTB: LED $led is missing (no /sys/class/leds entry)"
+          fi
+        done
       else
         bad "DTB: cannot extract or parse the DTB from fit.itb"
       fi
@@ -251,6 +259,7 @@ if [ -n "$rootfs_off" ]; then
       check_in_rootfs "etc/uci-defaults/99_antminer_setup"
       check_in_rootfs "etc/fw_env.config"
       check_in_rootfs "etc/uci-defaults/91_board_scripts"
+      check_in_rootfs "etc/uci-defaults/98_antminer_leds"
       check_in_rootfs "myscripts/run-diag-board.sh"
       # Права на /myscripts в образе не проверяются: их ставит uci-defaults
       # при первой загрузке (91_board_scripts), а в рантайме — сама диагностика
@@ -262,6 +271,12 @@ if [ -n "$rootfs_off" ]; then
         ok "rootfs: module zynq_fm_radio.ko"
       else
         bad "rootfs: zynq_fm_radio.ko is missing"
+      fi
+      # Драйвер индикаторов: без него DTB-узлы gpio-leds не работают.
+      if grep -qE "/lib/modules/[^/]+/leds-gpio\.ko$" "$TMP/rootfs.list"; then
+        ok "rootfs: module leds-gpio.ko"
+      else
+        bad "rootfs: leds-gpio.ko is missing (kmod-leds-gpio is not in the image)"
       fi
       if grep -qE "/www/luci-static/resources/view/fmradio/" "$TMP/rootfs.list"; then
         ok "rootfs: LuCI fmradio view"

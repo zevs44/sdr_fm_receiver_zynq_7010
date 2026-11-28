@@ -201,6 +201,24 @@ else
 	pass "kernel command line: no earlyprintk"
 fi
 
+# Индикаторы PS: узлы gpio-leds в DT работают только с kmod-leds-gpio,
+# поэтому проверяется результат — записи в /sys/class/leds.
+if [ "$PROFILE" = "qemu" ]; then
+	skip "PS LEDs: the QEMU device tree has no gpio-leds"
+else
+	missing=""
+	for l in "s9:red:usr" "s9:green:usr" "s9:red:inner"; do
+		if [ ! -e "/sys/class/leds/$l" ]; then
+			missing="$missing $l"
+		fi
+	done
+	if [ -z "$missing" ]; then
+		pass "PS LEDs registered: s9:red:usr, s9:green:usr, s9:red:inner"
+	else
+		fail "PS LEDs are missing:$missing (kmod-leds-gpio is not loaded)"
+	fi
+fi
+
 # ── 4. Радиотракт ────────────────────────────────────────────────────────
 sec "4. radio path"
 if [ "$PROFILE" = "qemu" ]; then

@@ -35,6 +35,7 @@ only its own `run-diag-board.sh` and never clears the directory.
 | Device tree | nodes `axi_i2s_adi@43c00000`, `fm-radio@43c60000`, `sound`, `audio_clock` | addresses match `design_1.bd` | yes |
 | Device tree | six NAND partition labels | `boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs` | yes |
 | Device tree | no `earlyprintk` in `/proc/cmdline` | the spare parameter is gone | yes |
+| LEDs | `/sys/class/leds` has `s9:red:usr`, `s9:green:usr`, `s9:red:inner` | `kmod-leds-gpio` is loaded and the DTS nodes work | `SKIP` |
 | Radio | `/dev/radio0` | the driver found the FPGA device | `SKIP` |
 | Sound | the `audio` card in `/proc/asound/cards` | the ALSA path and `simple-audio-card` are up | `SKIP` |
 | Sound, `--sound` | playback of a tone on J2 (PDM) | the stream opens, audio reaches the delta-sigma DAC | `SKIP` |

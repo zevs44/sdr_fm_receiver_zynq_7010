@@ -35,6 +35,7 @@ NAND, сеть и службы. Каждая проверка печатает �
 | Дерево устройства | узлы `axi_i2s_adi@43c00000`, `fm-radio@43c60000`, `sound`, `audio_clock` | адреса совпали с `design_1.bd` | да |
 | Дерево устройства | шесть меток разделов NAND в узле разметки | `boot`, `uboot`, `fpga`, `uboot_env`, `kernel`, `rootfs` | да |
 | Дерево устройства | в `/proc/cmdline` нет `earlyprintk` | лишний параметр убран | да |
+| Индикаторы | в `/sys/class/leds` есть `s9:red:usr`, `s9:green:usr`, `s9:red:inner` | `kmod-leds-gpio` загружен, узлы DTS работают | `SKIP` |
 | Радио | `/dev/radio0` | драйвер нашёл устройство в FPGA | `SKIP` |
 | Звук | карта `audio` в `/proc/asound/cards` | тракт ALSA и `simple-audio-card` поднят | `SKIP` |
 | Звук, `--sound` | воспроизведение тона на J2 (PDM) | поток открывается, звук идёт на ΔΣ-ЦАП | `SKIP` |

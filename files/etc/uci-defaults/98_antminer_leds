@@ -1,0 +1,26 @@
+#!/bin/sh
+# Default state of the PS LEDs on the Antminer S9 control board.
+# Runs once at first boot. Skipped when gpio-leds is absent.
+
+[ -e /sys/class/leds/s9:green:usr ] || exit 0
+
+uci -q delete system.led_green
+uci set system.led_green=led
+uci set system.led_green.name='green:status'
+uci set system.led_green.sysfs='s9:green:usr'
+uci set system.led_green.trigger='default-on'
+
+uci -q delete system.led_red
+uci set system.led_red=led
+uci set system.led_red.name='red:user'
+uci set system.led_red.sysfs='s9:red:usr'
+uci set system.led_red.trigger='none'
+
+uci -q delete system.led_red_inside
+uci set system.led_red_inside=led
+uci set system.led_red_inside.name='red:inner'
+uci set system.led_red_inside.sysfs='s9:red:inner'
+uci set system.led_red_inside.trigger='none'
+
+uci commit system
+exit 0
