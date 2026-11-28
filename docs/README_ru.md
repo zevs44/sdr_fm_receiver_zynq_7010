@@ -13,6 +13,8 @@
 | [03_nand_install_ru.md](03_nand_install_ru.md) | Русский | то же на русском |
 | [04_board_check.md](04_board_check.md) | English | диагностика платы: `/myscripts`, `run-diag-board.sh`, запуск через UART, SSH и LuCI, передача журнала, профиль QEMU |
 | [04_board_check_ru.md](04_board_check_ru.md) | Русский | то же на русском |
+| [05_board_peripherals.md](05_board_peripherals.md) | English | периферия платы: что распаяно, индикаторы PS, кнопки, площадка зуммера, XADC, вентиляторы, переключатели карты |
+| [05_board_peripherals_ru.md](05_board_peripherals_ru.md) | Русский | то же на русском |
 
 Схемы лежат в `docs/img/`. Это самодостаточные SVG: без внешних шрифтов, без
 растровых картинок, с прошитой тёмной подложкой — поэтому одинаково читаются в

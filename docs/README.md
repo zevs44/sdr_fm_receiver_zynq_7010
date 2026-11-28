@@ -13,6 +13,8 @@ Reference material for this board and this design. Everything here describes the
 | [03_nand_install_ru.md](03_nand_install_ru.md) | Русский | то же на русском |
 | [04_board_check.md](04_board_check.md) | English | board diagnostics: `/myscripts`, `run-diag-board.sh`, launch over UART, SSH and LuCI, log transfer, QEMU profile |
 | [04_board_check_ru.md](04_board_check_ru.md) | Русский | то же на русском |
+| [05_board_peripherals.md](05_board_peripherals.md) | English | board peripherals: what is populated, PS LEDs, buttons, buzzer footprint, XADC, fans, SD card switches |
+| [05_board_peripherals_ru.md](05_board_peripherals_ru.md) | Русский | то же на русском |
 
 Diagrams live in `docs/img/`. They are self-contained SVG files: no external fonts,
 no raster images, a dark background baked in, so they render the same on light and
