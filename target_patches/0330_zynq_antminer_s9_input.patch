@@ -5,7 +5,7 @@ index 0000000..0000000
 +++ b/target/linux/zynq/patches/0006-dts-antminer-s9-input.patch
 @@ -0,0 +1,51 @@
 +diff --git a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
-+index 2b98681..4079685 100644
++index f19c16c..046c04a 100644
 +--- a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
 ++++ b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
 +@@ -239,3 +239,46 @@
@@ -16,7 +16,7 @@ index 0000000..0000000
 ++/*
 ++ * Кнопки, зуммер и внутренний АЦП. Добавлено нашим патчем.
 ++ * Кнопки обслуживает gpio-button-hotplug: имя события берётся из label,
-++ * поэтому метки заданы как reset и ip-get — на них ссылаются rc.button.
+++ * поэтому метки заданы как reset и ip_get — на них ссылаются rc.button.
 ++ */
 ++/ {
 ++	gpio-keys {
@@ -29,7 +29,7 @@ index 0000000..0000000
 ++			debounce-interval = <20>;
 ++		};
 ++
-++		ip-get {
+++		ip_get {
 ++			label = "ip_get";
 ++			gpios = <&gpio0 51 0x1>;
 ++			linux,code = <0x100>;

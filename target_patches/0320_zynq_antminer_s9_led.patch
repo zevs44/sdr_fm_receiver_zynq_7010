@@ -1,16 +1,14 @@
 diff --git a/target/linux/zynq/patches/0005-dts-antminer-s9-led.patch b/target/linux/zynq/patches/0005-dts-antminer-s9-led.patch
 new file mode 100644
-index 0000000..5c1e7a2
+index 0000000..0000000
 --- /dev/null
 +++ b/target/linux/zynq/patches/0005-dts-antminer-s9-led.patch
 @@ -0,0 +1,17 @@
 +diff --git a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
-+index 9d3946f..c4f0a11 100644
++index c29c0f3..f19c16c 100644
 +--- a/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
 ++++ b/arch/arm/boot/dts/xilinx/zynq-antminer-s9.dts
-+@@ -48,6 +48,12 @@
-+ 		led_green: led_green {
-+ 			label = "s9:green:usr";
++@@ -52,6 +52,12 @@
 + 			gpios = <&gpio0 38 0x0>;
 + 			default-state = "off";
 + 		};
@@ -21,3 +19,5 @@ index 0000000..5c1e7a2
 ++			default-state = "off";
 ++		};
 + 	};
++ };
++ 
